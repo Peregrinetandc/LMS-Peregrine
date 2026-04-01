@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS — sample data for local testing
+-- Peregrine T&C — sample data for local testing
 -- ============================================================
 -- 1) Create auth users (Authentication → Add user) for:
 --      admin@peregrine.lms / instructor@peregrine.lms / learner@peregrine.lms

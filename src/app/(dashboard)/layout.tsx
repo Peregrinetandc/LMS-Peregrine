@@ -45,13 +45,13 @@ export default async function DashboardLayout({
               <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0">
                 <Image
                   src="/logo.png"
-                  alt="Peregrine LMS"
+                  alt="Peregrine T&C"
                   width={32}
                   height={32}
                   className="shrink-0"
                   style={{ width: 'auto', height: 'auto' }}
                 />
-                <span className="text-base font-bold text-slate-900 sm:text-lg">Peregrine LMS</span>
+                <span className="text-base font-bold text-slate-900 sm:text-lg">Peregrine T&C</span>
               </Link>
 
             </div>

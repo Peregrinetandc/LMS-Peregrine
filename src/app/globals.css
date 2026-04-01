@@ -64,3 +64,37 @@ input[type="range"] {
   background-color: transparent !important;
   accent-color: var(--primary);
 }
+
+/* Reusable matrix-style loader bars */
+.matrix-loader {
+  --loader-color: #065f46;
+  --loader-width: 45px;
+  --loader-height: 40px;
+  --loader-column-width: 10px;
+  width: var(--loader-width);
+  height: var(--loader-height);
+  background:
+    linear-gradient(#0000 calc(1 * 100% / 6), var(--loader-color) 0 calc(3 * 100% / 6), #0000 0),
+    linear-gradient(#0000 calc(2 * 100% / 6), var(--loader-color) 0 calc(4 * 100% / 6), #0000 0),
+    linear-gradient(#0000 calc(3 * 100% / 6), var(--loader-color) 0 calc(5 * 100% / 6), #0000 0);
+  background-size: var(--loader-column-width) 400%;
+  background-repeat: no-repeat;
+  background-position: 0% 100%, 50% 100%, 100% 100%;
+  animation: matrix-loader 1s infinite linear;
+}
+
+.matrix-loader-sm {
+  --loader-width: 34px;
+  --loader-height: 28px;
+  --loader-column-width: 7px;
+}
+
+@keyframes matrix-loader {
+  0% {
+    background-position: 0% 100%, 50% 100%, 100% 100%;
+  }
+
+  100% {
+    background-position: 0% 0%, 50% 0%, 100% 0%;
+  }
+}

@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – Test Accounts Setup (INSERT/UPSERT version)
+-- Peregrine T&C – Test Accounts Setup (INSERT/UPSERT version)
 -- Run this in the Supabase SQL Editor AFTER creating users in Auth
 -- ============================================================
 

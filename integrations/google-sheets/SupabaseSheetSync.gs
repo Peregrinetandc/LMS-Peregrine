@@ -1,5 +1,5 @@
 /**
- * Peregrine LMS – Google Sheets → Supabase sync
+ * Peregrine T&C – Google Sheets → Supabase sync
  *
  * Sheet layout (your convention):
  *   Row 1: email | password | course_id | full_name | sync_status

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Peregrine LMS — RLS policy repair
+-- Peregrine T&C — RLS policy repair
 -- =============================================================================
 -- Run the whole script in: Supabase Dashboard → SQL → New query → Paste → Run.
 -- (Or: psql "$DATABASE_URL" -f supabase/fix_rls_policies.sql)

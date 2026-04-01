@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – Storage & RLS Setup
+-- Peregrine T&C – Storage & RLS Setup
 -- Run this in the Supabase SQL Editor
 -- ============================================================
 

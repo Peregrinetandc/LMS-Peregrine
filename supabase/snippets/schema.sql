@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – Initial Supabase Schema (v1.0)
+-- Peregrine T&C – Initial Supabase Schema (v1.0)
 -- Run this in the Supabase SQL Editor
 -- ============================================================
 

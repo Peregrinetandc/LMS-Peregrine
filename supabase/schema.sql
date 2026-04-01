@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – Full database schema (baseline + migrations)
+-- Peregrine T&C – Full database schema (baseline + migrations)
 -- Source of truth: mirrors supabase/migrations/*.sql through
 -- 20260331143000_rls_module_progress_staff_select.
 -- Use: Supabase SQL Editor for a greenfield project, or compare

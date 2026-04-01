@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – Sample Course Seed Data
+-- Peregrine T&C – Sample Course Seed Data
 -- Run this AFTER schema.sql in the Supabase SQL Editor
 -- Replace 'YOUR_INSTRUCTOR_USER_ID' with a real user UUID
 -- from your auth.users table (the logged-in user's ID)
@@ -110,7 +110,7 @@ ON CONFLICT DO NOTHING;
 -- Done! Visit http://localhost:3000/courses to see the sample course.
 
 -- ============================================================
--- Peregrine LMS – Test Accounts Setup
+-- Peregrine T&C – Test Accounts Setup
 -- Run this in the Supabase SQL Editor
 -- This sets up 3 role-based test accounts
 -- ============================================================

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Menu, X } from 'lucide-react'
 
 export default function ModulesDrawerShell({
@@ -29,6 +29,17 @@ export default function ModulesDrawerShell({
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [open])
+
+  const closeDrawerOnModuleLinkClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null
+    const clickedLink = target?.closest('a[href]') as HTMLAnchorElement | null
+    if (!clickedLink) return
+
+    const href = clickedLink.getAttribute('href') ?? ''
+    if (href.includes('/modules/')) {
+      setOpen(false)
+    }
+  }
 
   return (
     <div className="relative min-h-[calc(100vh-8rem)]">
@@ -63,18 +74,22 @@ export default function ModulesDrawerShell({
             aria-label="Course syllabus navigation"
             className="fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-full max-w-md flex-col border-r border-slate-200 bg-white p-3 shadow-2xl sm:max-w-lg"
           >
-            <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
-              <h2 className="text-sm font-semibold text-slate-800">Course Syllabus</h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close syllabus drawer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1">
+            {/* Single scroll region so wheel/touch works over the title bar too, not only below it */}
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1"
+              onClick={closeDrawerOnModuleLinkClick}
+            >
+              <div className="sticky top-0 z-10 -mx-px mb-3 flex items-center justify-between border-b border-slate-100 bg-white pb-2 pt-0.5">
+                <h2 className="text-sm font-semibold text-slate-800">Course Syllabus</h2>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Close syllabus drawer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
               {sidebar}
             </div>
           </aside>

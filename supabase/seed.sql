@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – sample data + optional test-account roles
+-- Peregrine T&C – sample data + optional test-account roles
 --
 -- Order: run supabase/schema.sql (or `supabase db reset`) first.
 -- Requires at least one auth user so profiles exist (sign up once,

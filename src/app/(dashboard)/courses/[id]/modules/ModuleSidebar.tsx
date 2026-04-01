@@ -128,7 +128,7 @@ export default function ModuleSidebar({
 
       <nav
         id={navId}
-        className="overflow-y-auto overscroll-y-contain p-3 space-y-4"
+        className="p-3 space-y-4"
         aria-label="Course modules by week"
       >
         {isEnrolled && moduleUi && totalModules > 0 && (

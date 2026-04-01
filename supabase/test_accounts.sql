@@ -1,5 +1,5 @@
 -- ============================================================
--- Peregrine LMS – Test Accounts Setup
+-- Peregrine T&C – Test Accounts Setup
 -- Run this in the Supabase SQL Editor
 -- This sets up 3 role-based test accounts
 -- ============================================================

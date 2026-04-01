@@ -1,6 +1,7 @@
 import { login } from './actions'
 import Image from 'next/image'
-import { AppButton, AppCard, AppFieldLabel } from '@/components/ui/primitives'
+import { AppCard, AppFieldLabel } from '@/components/ui/primitives'
+import LoginSubmitButton from './LoginSubmitButton'
 
 export default function LoginPage() {
   return (
@@ -8,7 +9,7 @@ export default function LoginPage() {
       <div className="mx-auto flex min-h-[80vh] w-full max-w-md items-center">
       <AppCard className="w-full space-y-8 p-6 sm:p-10">
         <div className="text-center">
-          <Image src="/logo.png" alt="Peregrine LMS Logo" width={80} height={80} className="mx-auto mb-4" />
+          <Image src="/logo.png" alt="Peregrine T&C Logo" width={80} height={80} className="mx-auto mb-4" />
           <h2 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">Sign in to your account</h2>
           <p className="mt-2 text-sm text-slate-600">
             Or contact your administrator if you don&apos;t have an account
@@ -43,12 +44,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <AppButton
-              formAction={login}
-              className="w-full"
-            >
-              Sign in
-            </AppButton>
+            <LoginSubmitButton />
           </div>
         </form>
       </AppCard>

@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Peregrine LMS",
+  title: "Peregrine T&C",
   description: "Advanced Learning Management System",
   icons: {
     icon: "/favicon.ico",
