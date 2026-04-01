@@ -8,7 +8,20 @@ const SAFE_KEY_FILENAME = /^[a-zA-Z0-9._-]+\.json$/
 function loadServiceAccountCredentials(): Record<string, unknown> {
   const inline = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()
   if (inline) {
-    return JSON.parse(inline) as Record<string, unknown>
+    try {
+      const parsed = JSON.parse(inline) as Record<string, unknown>
+      if (!parsed.client_email || !parsed.private_key) {
+        throw new Error(
+          'GOOGLE_SERVICE_ACCOUNT_JSON is missing required keys (client_email/private_key).',
+        )
+      }
+      return parsed
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : 'Invalid JSON'
+      throw new Error(
+        `GOOGLE_SERVICE_ACCOUNT_JSON is invalid. Ensure it is one-line JSON with escaped newlines in private_key (\\n). Detail: ${detail}`,
+      )
+    }
   }
   // Basename only, file must live in /credentials (avoids bundler tracing the whole repo)
   const keyFile = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim()
@@ -19,8 +32,19 @@ function loadServiceAccountCredentials(): Record<string, unknown> {
       )
     }
     const resolved = path.join(process.cwd(), 'credentials', keyFile)
-    const file = fs.readFileSync(resolved, 'utf8')
-    return JSON.parse(file) as Record<string, unknown>
+    try {
+      const file = fs.readFileSync(resolved, 'utf8')
+      const parsed = JSON.parse(file) as Record<string, unknown>
+      if (!parsed.client_email || !parsed.private_key) {
+        throw new Error('service-account JSON missing client_email/private_key.')
+      }
+      return parsed
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : 'Read/parse error'
+      throw new Error(
+        `Could not read GOOGLE_SERVICE_ACCOUNT_KEY_FILE from credentials/${keyFile}. Detail: ${detail}`,
+      )
+    }
   }
   throw new Error(
     'Google Drive is not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON, or GOOGLE_SERVICE_ACCOUNT_KEY_FILE (filename under credentials/), and GOOGLE_DRIVE_ASSIGNMENTS_FOLDER_ID.',
@@ -38,6 +62,14 @@ function isStorageQuotaError(e: unknown): boolean {
   return (
     /storage quota|storageQuotaExceeded|does not have storage quota/i.test(s) ||
     /Service Accounts do not have storage quota/i.test(s)
+  )
+}
+
+function isPermissionOrFolderError(e: unknown): boolean {
+  const s = JSON.stringify(e)
+  return (
+    /insufficient permissions|insufficientpermission|forbidden|permission denied/i.test(s) ||
+    /file not found|notFound|404/i.test(s)
   )
 }
 
@@ -100,6 +132,11 @@ export async function uploadAssignmentToDrive(params: {
   } catch (e) {
     if (isStorageQuotaError(e)) {
       throw new Error(SHARED_DRIVE_HELP)
+    }
+    if (isPermissionOrFolderError(e)) {
+      throw new Error(
+        'Google Drive folder is not accessible by the service account. Verify GOOGLE_DRIVE_ASSIGNMENTS_FOLDER_ID points to a folder in a Shared drive, and add the service account as Content manager/Manager.',
+      )
     }
     throw e
   }

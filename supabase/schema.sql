@@ -1,7 +1,7 @@
 -- ============================================================
 -- Peregrine LMS – Full database schema (baseline + migrations)
 -- Source of truth: mirrors supabase/migrations/*.sql through
--- 20260331130000_drop_courses_min_attendance_pct.
+-- 20260331143000_rls_module_progress_staff_select.
 -- Use: Supabase SQL Editor for a greenfield project, or compare
 -- against `supabase db dump` / migration history.
 -- Then run supabase/seed.sql for sample rows (after auth users exist).
@@ -103,6 +103,7 @@ create table public.modules (
   session_end_at   timestamptz,
   quiz_passing_pct smallint not null default 60
     check (quiz_passing_pct >= 0 and quiz_passing_pct <= 100),
+  quiz_allow_retest boolean not null default true,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -149,6 +150,8 @@ create table public.quiz_attempts (
 );
 
 create index quiz_attempts_module_id_idx on public.quiz_attempts(module_id);
+create unique index quiz_attempts_module_learner_unique
+  on public.quiz_attempts (module_id, learner_id);
 create index quiz_attempts_module_learner_submitted_idx
   on public.quiz_attempts (module_id, learner_id, submitted_at desc);
 
@@ -370,7 +373,22 @@ create trigger module_session_roster_sync_progress
   for each row execute function public.sync_session_progress_from_roster();
 
 -- ──────────────────────────────────────────────
--- 10. CERTIFICATES
+-- 10. COURSE COMPLETIONS
+-- ──────────────────────────────────────────────
+create table public.course_completions (
+  id           uuid primary key default gen_random_uuid(),
+  course_id    uuid not null references public.courses(id) on delete cascade,
+  learner_id   uuid not null references public.profiles(id) on delete cascade,
+  completed_at timestamptz not null default now(),
+  created_at   timestamptz not null default now(),
+  unique (course_id, learner_id)
+);
+
+create index course_completions_course_id_idx on public.course_completions(course_id);
+create index course_completions_learner_id_idx on public.course_completions(learner_id);
+
+-- ──────────────────────────────────────────────
+-- 11. CERTIFICATES
 -- ──────────────────────────────────────────────
 create type certificate_status as enum ('valid', 'revoked');
 
@@ -427,6 +445,7 @@ alter table public.quiz_options enable row level security;
 alter table public.quiz_attempts enable row level security;
 alter table public.quiz_attempt_answers enable row level security;
 alter table public.module_feedback_submissions enable row level security;
+alter table public.course_completions enable row level security;
 alter table public.certificates enable row level security;
 
 -- Policies for modules and sections (updated earlier)
@@ -643,6 +662,11 @@ create policy "Enrolled learners insert quiz attempts"
     )
   );
 
+create policy "Learners update own quiz attempts"
+  on public.quiz_attempts for update to authenticated
+  using (learner_id = auth.uid())
+  with check (learner_id = auth.uid());
+
 create policy "Learners view own quiz attempt answers"
   on public.quiz_attempt_answers for select to authenticated
   using (
@@ -666,6 +690,21 @@ create policy "Staff view quiz attempt answers"
 
 create policy "Learners insert answers for own attempt"
   on public.quiz_attempt_answers for insert to authenticated
+  with check (
+    exists (
+      select 1 from public.quiz_attempts a
+      where a.id = quiz_attempt_answers.attempt_id and a.learner_id = auth.uid()
+    )
+  );
+
+create policy "Learners update own quiz attempt answers"
+  on public.quiz_attempt_answers for update to authenticated
+  using (
+    exists (
+      select 1 from public.quiz_attempts a
+      where a.id = quiz_attempt_answers.attempt_id and a.learner_id = auth.uid()
+    )
+  )
   with check (
     exists (
       select 1 from public.quiz_attempts a
@@ -699,6 +738,35 @@ create policy "Enrolled learners submit feedback once"
       where mod.id = module_feedback_submissions.module_id
         and e.learner_id = auth.uid()
         and mod.type = 'feedback'
+    )
+  );
+
+-- course_completions
+create policy "Learners view own course completion"
+  on public.course_completions for select to authenticated
+  using (learner_id = auth.uid());
+
+create policy "Learners insert own course completion when enrolled"
+  on public.course_completions for insert to authenticated
+  with check (
+    learner_id = auth.uid()
+    and exists (
+      select 1
+      from public.enrollments e
+      where e.course_id = course_completions.course_id
+        and e.learner_id = auth.uid()
+    )
+  );
+
+create policy "Staff view course completions for their courses"
+  on public.course_completions for select to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1
+      from public.courses c
+      where c.id = course_completions.course_id
+        and c.instructor_id = auth.uid()
     )
   );
 
@@ -882,6 +950,21 @@ create policy "Learners see their certificates" on public.certificates
 -- Module progress: learners manage their own
 create policy "Learners manage their progress" on public.module_progress
   for all using (learner_id = auth.uid());
+
+create policy "Staff view module progress for their courses"
+  on public.module_progress
+  for select
+  to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1
+      from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_progress.module_id
+        and c.instructor_id = auth.uid()
+    )
+  );
 
 -- Session roster: learners read own row; staff manage
 create policy "Learners read own session roster row" on public.module_session_roster
@@ -1277,3 +1360,28 @@ create policy "internship_daily_course admin read all"
   for select
   to authenticated
   using (public.is_admin());
+
+-- ──────────────────────────────────────────────
+-- STORAGE (assignment files bucket + policies)
+-- ──────────────────────────────────────────────
+insert into storage.buckets (id, name, public)
+values ('eduflow-storage', 'eduflow-storage', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Public Access" on storage.objects;
+drop policy if exists "Learners can upload assignments" on storage.objects;
+drop policy if exists "Learners can update own assignments" on storage.objects;
+
+create policy "Public Access"
+on storage.objects for select
+using (bucket_id = 'eduflow-storage');
+
+create policy "Learners can upload assignments"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'eduflow-storage');
+
+create policy "Learners can update own assignments"
+on storage.objects for update
+to authenticated
+using (bucket_id = 'eduflow-storage');

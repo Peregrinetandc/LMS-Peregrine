@@ -152,6 +152,42 @@ FROM (VALUES
     2,
     NULL::timestamptz,
     false
+  ),
+  (
+    'c1000000-0000-0000-0000-000000000007'::uuid,
+    'a1b2c3d4-0000-0000-0000-000000000001'::uuid,
+    'b1000000-0000-0000-0000-000000000003'::uuid,
+    'feedback',
+    'Week 3 Feedback Checkpoint',
+    NULL::text,
+    1,
+    3,
+    NULL::timestamptz,
+    false
+  ),
+  (
+    'c1000000-0000-0000-0000-000000000008'::uuid,
+    'a1b2c3d4-0000-0000-0000-000000000001'::uuid,
+    'b1000000-0000-0000-0000-000000000003'::uuid,
+    'external_resource',
+    'Extra Learning Resources',
+    NULL::text,
+    2,
+    3,
+    NULL::timestamptz,
+    false
+  ),
+  (
+    'c1000000-0000-0000-0000-000000000009'::uuid,
+    'a1b2c3d4-0000-0000-0000-000000000001'::uuid,
+    'b1000000-0000-0000-0000-000000000003'::uuid,
+    'offline_session',
+    'In-person Lab Session',
+    NULL::text,
+    3,
+    3,
+    NULL::timestamptz,
+    false
   )
 ) AS v(
   id,
@@ -178,6 +214,23 @@ ON CONFLICT (id) DO UPDATE SET
   week_index = excluded.week_index,
   available_from = excluded.available_from,
   is_sequential = excluded.is_sequential;
+
+-- Extra content fields for non-video module types
+UPDATE public.modules
+SET description = 'Share what you learned this week and where you got stuck.'
+WHERE id = 'c1000000-0000-0000-0000-000000000007'::uuid;
+
+UPDATE public.modules
+SET description = 'Helpful links for deeper learning and practice tasks.'
+WHERE id = 'c1000000-0000-0000-0000-000000000008'::uuid;
+
+UPDATE public.modules
+SET
+  description = 'Bring your laptop. We will build a mini project together.',
+  session_location = 'Lab A-201, Main Campus',
+  session_start_at = now() + interval '10 days',
+  session_end_at = now() + interval '10 days 2 hours'
+WHERE id = 'c1000000-0000-0000-0000-000000000009'::uuid;
 
 INSERT INTO public.assignments (id, module_id, max_score, passing_score, deadline_at, allow_late, late_penalty_pct)
 SELECT
@@ -245,6 +298,32 @@ ON CONFLICT (id) DO UPDATE SET
   is_correct = excluded.is_correct,
   sort_order = excluded.sort_order;
 
+INSERT INTO public.module_external_links (id, module_id, label, url, sort_order)
+SELECT * FROM (VALUES
+  (
+    'f1000000-0000-0000-0000-000000000001'::uuid,
+    'c1000000-0000-0000-0000-000000000008'::uuid,
+    'MDN HTML Guide',
+    'https://developer.mozilla.org/en-US/docs/Learn/HTML',
+    0
+  ),
+  (
+    'f1000000-0000-0000-0000-000000000002'::uuid,
+    'c1000000-0000-0000-0000-000000000008'::uuid,
+    'CSS Tricks Almanac',
+    'https://css-tricks.com/almanac/',
+    1
+  )
+) AS v(id, module_id, label, url, sort_order)
+WHERE EXISTS (
+  SELECT 1 FROM public.modules m WHERE m.id = 'c1000000-0000-0000-0000-000000000008'::uuid
+)
+ON CONFLICT (id) DO UPDATE SET
+  module_id = excluded.module_id,
+  label = excluded.label,
+  url = excluded.url,
+  sort_order = excluded.sort_order;
+
 INSERT INTO public.enrollments (course_id, learner_id)
 SELECT 'a1b2c3d4-0000-0000-0000-000000000001'::uuid, p.id
 FROM public.profiles p
@@ -270,6 +349,66 @@ WHERE id = (SELECT id FROM auth.users WHERE email = 'instructor@peregrine.lms' L
 UPDATE public.profiles
 SET role = 'learner', full_name = 'John Learner'
 WHERE id = (SELECT id FROM auth.users WHERE email = 'learner@peregrine.lms' LIMIT 1);
+
+-- Ensure named learner is enrolled in the sample course (if account exists).
+INSERT INTO public.enrollments (course_id, learner_id)
+SELECT
+  'a1b2c3d4-0000-0000-0000-000000000001'::uuid,
+  u.id
+FROM auth.users u
+WHERE u.email = 'learner@peregrine.lms'
+ON CONFLICT (course_id, learner_id) DO NOTHING;
+
+-- Sample learner progress for testing dashboards / instructor views.
+INSERT INTO public.module_progress (module_id, learner_id, watch_pct, is_completed, completed_at)
+SELECT
+  m.id,
+  u.id,
+  100,
+  true,
+  now()
+FROM auth.users u
+JOIN public.modules m ON m.id IN (
+  'c1000000-0000-0000-0000-000000000001'::uuid, -- video
+  'c1000000-0000-0000-0000-000000000008'::uuid  -- external_resource
+)
+WHERE u.email = 'learner@peregrine.lms'
+ON CONFLICT (module_id, learner_id) DO UPDATE SET
+  watch_pct = excluded.watch_pct,
+  is_completed = excluded.is_completed,
+  completed_at = coalesce(public.module_progress.completed_at, excluded.completed_at);
+
+-- Sample passed quiz attempt so MCQ completion can be tested.
+INSERT INTO public.quiz_attempts (id, module_id, learner_id, score, max_score, passed, submitted_at)
+SELECT
+  'f2000000-0000-0000-0000-000000000001'::uuid,
+  'c1000000-0000-0000-0000-000000000006'::uuid,
+  u.id,
+  1,
+  1,
+  true,
+  now()
+FROM auth.users u
+WHERE u.email = 'learner@peregrine.lms'
+ON CONFLICT (module_id, learner_id) DO UPDATE SET
+  score = excluded.score,
+  max_score = excluded.max_score,
+  passed = excluded.passed,
+  submitted_at = excluded.submitted_at;
+
+-- Sample feedback submission for the feedback module.
+INSERT INTO public.module_feedback_submissions (id, module_id, learner_id, body, submitted_at)
+SELECT
+  'f3000000-0000-0000-0000-000000000001'::uuid,
+  'c1000000-0000-0000-0000-000000000007'::uuid,
+  u.id,
+  'Great module flow. I would love one more practice exercise before the final quiz.',
+  now()
+FROM auth.users u
+WHERE u.email = 'learner@peregrine.lms'
+ON CONFLICT (module_id, learner_id) DO UPDATE SET
+  body = excluded.body,
+  submitted_at = excluded.submitted_at;
 
 -- Verbose check (safe to run in SQL Editor)
 -- SELECT p.full_name, p.role, u.email
