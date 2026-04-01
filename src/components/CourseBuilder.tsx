@@ -367,6 +367,14 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
   const [selectedInstructorId, setSelectedInstructorId] = useState('')
   const [thumbnailUploading, setThumbnailUploading] = useState(false)
   const [thumbnailUploadError, setThumbnailUploadError] = useState('')
+  const [thumbnailPreviewVersion, setThumbnailPreviewVersion] = useState(() => Date.now())
+
+  const thumbnailPreviewSrc = useMemo(() => {
+    const base = toRenderableImageUrl(thumbnailUrl)
+    if (!base) return ''
+    const joiner = base.includes('?') ? '&' : '?'
+    return `${base}${joiner}v=${thumbnailPreviewVersion}`
+  }, [thumbnailUrl, thumbnailPreviewVersion])
 
   useEffect(() => {
     let cancelled = false
@@ -482,6 +490,11 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       if (user) setSelectedInstructorId(user.id)
     })()
   }, [courseId, selectedInstructorId])
+
+  useEffect(() => {
+    // Bust browser cache when thumbnail URL changes so preview always refreshes.
+    setThumbnailPreviewVersion(Date.now())
+  }, [thumbnailUrl])
 
   const activeModule = modules.find((m) => m.id === activeId) ?? null
 
@@ -1051,7 +1064,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
             {thumbnailUrl && (
               <div className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-xl group-hover:block group-focus-within:block">
                 <img
-                  src={toRenderableImageUrl(thumbnailUrl)}
+                  src={thumbnailPreviewSrc}
                   alt="Course thumbnail preview"
                   className="h-32 w-full rounded-lg object-cover"
                 />
