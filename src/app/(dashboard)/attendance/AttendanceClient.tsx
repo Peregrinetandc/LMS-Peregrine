@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { prepareSessionRoster } from './actions'
 import SessionAttendanceClient, { type RosterRow } from './SessionAttendanceClient'
@@ -58,6 +59,12 @@ export default function AttendanceClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
+        <Link
+          href="/attendance/bind-cards"
+          className="text-sm font-medium text-blue-700 hover:text-blue-900 rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2"
+        >
+          Bind ID cards
+        </Link>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm font-medium text-slate-700">Course</label>
           <select

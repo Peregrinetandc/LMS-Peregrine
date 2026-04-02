@@ -3,7 +3,26 @@ import Image from 'next/image'
 import { AppCard, AppFieldLabel } from '@/components/ui/primitives'
 import LoginSubmitButton from './LoginSubmitButton'
 
-export default function LoginPage() {
+function messageFromSearchParams(sp: { message?: string | string[] } | undefined) {
+  const raw = sp?.message
+  if (raw == null) return null
+  const s = Array.isArray(raw) ? raw[0] : raw
+  if (!s) return null
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string | string[] }>
+}) {
+  const sp = await searchParams
+  const loginErrorMessage = messageFromSearchParams(sp)
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[80vh] w-full max-w-md items-center">
@@ -23,6 +42,14 @@ export default function LoginPage() {
           </p>
         </div>
         <form className="mt-8 space-y-6" action={login}>
+          {loginErrorMessage ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+            >
+              {loginErrorMessage}
+            </div>
+          ) : null}
           <div className="rounded-md shadow-sm space-y-2">
             <div>
               <AppFieldLabel>Email address</AppFieldLabel>

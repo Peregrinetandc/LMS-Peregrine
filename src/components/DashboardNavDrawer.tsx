@@ -4,13 +4,16 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import {
+  BarChart3,
   BookOpen,
   ClipboardCheck,
   Clock,
+  FileUp,
   LayoutDashboard,
   LogOut,
   Menu,
   PlusCircle,
+  QrCode,
   UserCheck,
   Users,
   X,
@@ -19,7 +22,17 @@ import {
 type NavItem = {
   href: string
   label: string
-  icon: 'dashboard' | 'courses' | 'grading' | 'attendance' | 'internship' | 'createCourse' | 'users'
+  icon:
+    | 'dashboard'
+    | 'courses'
+    | 'grading'
+    | 'attendance'
+    | 'attendanceReport'
+    | 'bindIdCards'
+    | 'internship'
+    | 'createCourse'
+    | 'users'
+    | 'importIdCards'
 }
 
 export default function DashboardNavDrawer({
@@ -65,12 +78,18 @@ export default function DashboardNavDrawer({
         return <ClipboardCheck className="h-4 w-4" />
       case 'attendance':
         return <UserCheck className="h-4 w-4" />
+      case 'attendanceReport':
+        return <BarChart3 className="h-4 w-4" />
+      case 'bindIdCards':
+        return <QrCode className="h-4 w-4" />
       case 'internship':
         return <Clock className="h-4 w-4" />
       case 'createCourse':
         return <PlusCircle className="h-4 w-4" />
       case 'users':
         return <Users className="h-4 w-4" />
+      case 'importIdCards':
+        return <FileUp className="h-4 w-4" />
       default:
         return <BookOpen className="h-4 w-4" />
     }
