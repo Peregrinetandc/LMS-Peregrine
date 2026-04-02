@@ -20,7 +20,29 @@ import {
 } from '@/lib/offline-bind-queue'
 import { Camera, Scan, Search, X, XCircle } from 'lucide-react'
 
-type LearnerOption = { id: string; full_name: string | null }
+type LearnerOption = { id: string; full_name: string | null; email: string | null }
+
+function learnerListPrimaryLine(u: LearnerOption): string {
+  const name = u.full_name?.trim()
+  if (name) return name
+  return u.email?.trim() || u.id
+}
+
+function learnerListSecondaryLine(u: LearnerOption): string | null {
+  const name = u.full_name?.trim()
+  const mail = u.email?.trim()
+  if (name && mail) return mail
+  return null
+}
+
+function learnerSelectedSummary(u: LearnerOption): string {
+  const name = u.full_name?.trim()
+  const mail = u.email?.trim()
+  if (name && mail) return `${name} · ${mail}`
+  if (name) return name
+  if (mail) return mail
+  return u.id
+}
 
 export default function BindCardsClient({
   courses,
@@ -66,7 +88,8 @@ export default function BindCardsClient({
       return null
     }
     const u = courseLearners.find((l) => l.id === previewLookup.learnerId)
-    return u?.full_name ?? u?.id ?? `Learner ${previewLookup.learnerId.slice(0, 8)}…`
+    if (!u) return `Learner ${previewLookup.learnerId.slice(0, 8)}…`
+    return learnerSelectedSummary(u)
   }, [previewLookup, courseLearners])
 
   const refreshQueueUi = useCallback(async () => {
@@ -158,7 +181,7 @@ export default function BindCardsClient({
           const slice = ids.slice(i, i + PROFILE_CHUNK)
           const { data: profs, error: e2 } = await supabase
             .from('profiles')
-            .select('id, full_name')
+            .select('id, full_name, email')
             .in('id', slice)
           if (cancelled) return
           if (e2) {
@@ -168,10 +191,14 @@ export default function BindCardsClient({
           all.push(...((profs ?? []) as LearnerOption[]))
         }
         all.sort((a, b) => {
-          const na = (a.full_name ?? a.id).toLowerCase()
-          const nb = (b.full_name ?? b.id).toLowerCase()
+          const na = learnerListPrimaryLine(a).toLowerCase()
+          const nb = learnerListPrimaryLine(b).toLowerCase()
           if (na < nb) return -1
           if (na > nb) return 1
+          const ea = (a.email ?? '').toLowerCase()
+          const eb = (b.email ?? '').toLowerCase()
+          if (ea < eb) return -1
+          if (ea > eb) return 1
           return 0
         })
         if (!cancelled) setCourseLearners(all)
@@ -205,11 +232,15 @@ export default function BindCardsClient({
       return
     }
     const rows = courseLearners
-      .filter((u) => (u.full_name ?? u.id).toLowerCase().includes(q))
+      .filter((u) => {
+        const name = (u.full_name ?? '').toLowerCase()
+        const mail = (u.email ?? '').toLowerCase()
+        return name.includes(q) || mail.includes(q)
+      })
       .slice(0, 30)
     setLearnerHits(rows)
     if (rows.length === 0) {
-      setLearnerSearchNote('No learners found matching that name.')
+      setLearnerSearchNote('No learners found matching that name or email.')
     }
   }
 
@@ -477,9 +508,7 @@ export default function BindCardsClient({
           )}
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">
-            Find learner by name
-          </label>
+          <label className="text-xs font-medium text-slate-600">Find learner by name or email</label>
           <div className="flex flex-wrap gap-2 items-center">
             <input
               value={learnerQuery}
@@ -496,7 +525,7 @@ export default function BindCardsClient({
                 }
               }}
               disabled={!courseId}
-              placeholder="Learner name…"
+              placeholder="Name or email…"
               className="flex-1 min-w-[160px] border border-slate-300 rounded-lg px-3 py-2 text-sm"
             />
             <button
@@ -519,13 +548,16 @@ export default function BindCardsClient({
                     type="button"
                     onClick={() => {
                       setLearnerPick(u)
-                      setLearnerQuery(u.full_name ?? u.id)
+                      setLearnerQuery(learnerListPrimaryLine(u))
                       setLearnerHits([])
                       setLearnerSearchNote(null)
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-white"
                   >
-                    {u.full_name ?? u.id}
+                    <span className="block font-medium text-slate-900">{learnerListPrimaryLine(u)}</span>
+                    {learnerListSecondaryLine(u) && (
+                      <span className="block text-xs text-slate-500">{learnerListSecondaryLine(u)}</span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -533,7 +565,7 @@ export default function BindCardsClient({
           )}
           {learnerPick && (
             <p className="text-xs text-emerald-800 pt-1">
-              Selected: <span className="font-medium">{learnerPick.full_name ?? learnerPick.id}</span>
+              Selected: <span className="font-medium">{learnerSelectedSummary(learnerPick)}</span>
             </p>
           )}
         </div>
@@ -593,7 +625,7 @@ export default function BindCardsClient({
             </p>
             <p>
               <span className="font-medium text-slate-700">Selected learner:</span>{' '}
-              {learnerPick?.full_name ?? '—'}
+              {learnerPick ? learnerSelectedSummary(learnerPick) : '—'}
             </p>
             <p>
               <span className="font-medium text-slate-700">Card:</span>{' '}

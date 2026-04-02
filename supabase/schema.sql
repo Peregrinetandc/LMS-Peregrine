@@ -1,7 +1,7 @@
 -- ============================================================
 -- Peregrine T&C – Full database schema (baseline + migrations)
 -- Source of truth: mirrors supabase/migrations/*.sql through
--- 20260402100000_offline_learner_id_cards.
+-- 20260403120000_profiles_email.
 -- Use: Supabase SQL Editor for a greenfield project, or compare
 -- against `supabase db dump` / migration history.
 -- Then run supabase/seed.sql for sample rows (after auth users exist).
@@ -18,21 +18,33 @@ create type user_role as enum ('admin', 'instructor', 'learner');
 create table public.profiles (
   id            uuid primary key references auth.users on delete cascade,
   full_name     varchar(120),
+  email         text,
   role          user_role not null default 'learner',
   is_active     boolean not null default true,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
 
+comment on column public.profiles.email is 'Copied from auth.users.email on signup.';
+
 -- Auto-create profile on new user signup
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
-  insert into public.profiles (id, full_name, role)
-  values (new.id, new.raw_user_meta_data->>'full_name', 'learner');
+  insert into public.profiles (id, full_name, role, email)
+  values (
+    new.id,
+    new.raw_user_meta_data->>'full_name',
+    'learner',
+    new.email
+  );
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 create trigger on_auth_user_created
   after insert on auth.users
