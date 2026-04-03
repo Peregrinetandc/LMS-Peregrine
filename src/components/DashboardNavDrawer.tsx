@@ -8,6 +8,7 @@ import {
   BookOpen,
   ClipboardCheck,
   Clock,
+  FileSpreadsheet,
   FileUp,
   LayoutDashboard,
   LogOut,
@@ -33,6 +34,7 @@ type NavItem = {
     | 'createCourse'
     | 'users'
     | 'importIdCards'
+    | 'sheetSync'
 }
 
 export default function DashboardNavDrawer({
@@ -90,6 +92,8 @@ export default function DashboardNavDrawer({
         return <Users className="h-4 w-4" />
       case 'importIdCards':
         return <FileUp className="h-4 w-4" />
+      case 'sheetSync':
+        return <FileSpreadsheet className="h-4 w-4" />
       default:
         return <BookOpen className="h-4 w-4" />
     }

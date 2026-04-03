@@ -1,15 +1,19 @@
 /**
- * Peregrine T&C – Google Sheets → Supabase sync
+ * Peregrine T&C – Google Sheets → Supabase sync (LEGACY all-in-script)
  *
- * Sheet layout (your convention):
- *   Row 1: email | password | course_id | full_name | sync_status
+ * Preferred workflow: deploy SheetExportWebApp.gs as a Web App (HMAC, no Supabase in Apps Script),
+ * then run sync from the Next.js app (Vercel) using the service role — see
+ * src/lib/integrations/google-sheets/ and POST /api/integrations/google-sheets/sync.
+ *
+ * Sheet layout (legacy script still expects a sync_status column if you use menus/onEdit below):
+ *   Row 1: email | password | course_id | full_name [| sync_status if using legacy sync]
  *   Row 2: (optional labels / blank)
  *   Row 3+: data rows
  *
  * course_id cell: one or more values separated by comma/semicolon/newline.
  *   Each value can be a Supabase course UUID OR a course_code (placeholder created if missing).
  *
- * Setup (one-time in Apps Script):
+ * Setup (one-time in Apps Script) — only if you keep this legacy path:
  *   1. Project Settings → Script properties → Add:
  *        SUPABASE_URL          = https://YOUR_PROJECT.supabase.co (must be https, no trailing slash)
  *        SUPABASE_SERVICE_KEY  = your service_role JWT (never share; never commit)

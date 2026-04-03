@@ -36,6 +36,9 @@ export default async function DashboardLayout({
     ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
     ...(isInstructor ? [{ href: '/admin/internship', label: 'Session Logs', icon: 'internship' as const }] : []),
     ...(isAdmin ? [{ href: '/admin/offline-cards', label: 'Import ID cards', icon: 'importIdCards' as const }] : []),
+    ...(isAdmin
+      ? [{ href: '/dashboard/admin/sheet-sync-log', label: 'Sheet sync log', icon: 'sheetSync' as const }]
+      : []),
     // ...(isAdmin ? [{ href: '/admin/users', label: 'Users', icon: 'users' as const }] : []),
   ]
 

@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil } from 'lucide-react'
+import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil, FileSpreadsheet } from 'lucide-react'
 import { AppButton, AppCard, EmptyState, PageHeader } from '@/components/ui/primitives'
 
 export default async function DashboardPage() {
@@ -214,6 +214,27 @@ export default async function DashboardPage() {
           </AppCard>
         ))}
       </div>
+
+      {isAdmin && (
+        <AppCard className="p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-violet-50 p-2">
+                <FileSpreadsheet className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">Google Sheet → LMS sync</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  View runs, trigger a sync from the sheet Web App, or set up a Vercel cron later.
+                </p>
+              </div>
+            </div>
+            <Link href="/dashboard/admin/sheet-sync-log" className="inline-flex shrink-0">
+              <AppButton variant="secondary">Open sheet sync log</AppButton>
+            </Link>
+          </div>
+        </AppCard>
+      )}
 
       {/* Staff: course list */}
       {isInstructor && (
