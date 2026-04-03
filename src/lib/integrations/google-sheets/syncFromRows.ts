@@ -62,8 +62,20 @@ export type RunSheetSyncResult = {
   rowsTotal: number
   rowsOk: number
   rowsSkipped: number
+  /** True when the sheet had more rows left but we stopped early (Vercel time limit). Run again. */
+  truncated: boolean
+  workRowsProcessed: number
+  maxWorkRowsPerRun: number
   errorSummary: string | null
   details: { rows: Array<{ rowNumber: number; outcome: string; message?: string; skipped?: boolean }> }
+}
+
+/** Rows that actually run Auth/DB work per HTTP request (idempotent skips do not count). */
+export function resolveMaxWorkRowsPerRun(): number {
+  const raw = process.env.SHEET_SYNC_MAX_WORK_ROWS
+  const parsed = raw ? Number.parseInt(raw, 10) : 25
+  if (!Number.isFinite(parsed) || parsed < 1) return 25
+  return Math.min(parsed, 500)
 }
 
 /**
@@ -75,8 +87,10 @@ export async function runSheetSync(options: {
   webAppUrl: string
   exportSecret: string
   force?: boolean
+  maxWorkRowsPerRun?: number
 }): Promise<RunSheetSyncResult> {
   const { admin, instructorId, webAppUrl, exportSecret, force } = options
+  const maxWorkRowsPerRun = options.maxWorkRowsPerRun ?? resolveMaxWorkRowsPerRun()
 
   const { data: runInsert, error: runInsertErr } = await admin
     .from('sheet_sync_runs')
@@ -119,6 +133,9 @@ export async function runSheetSync(options: {
     let rowsSkipped = 0
     let anyPartial = false
     let anyError = false
+    let workBudget = maxWorkRowsPerRun
+    let workRowsProcessed = 0
+    let truncated = false
 
     for (const row of rows) {
       const hash = buildPayloadHash(row)
@@ -134,6 +151,13 @@ export async function runSheetSync(options: {
         details.push({ rowNumber: row.rowNumber, outcome: prev.last_outcome, skipped: true })
         continue
       }
+
+      if (workBudget <= 0) {
+        truncated = true
+        break
+      }
+      workBudget--
+      workRowsProcessed++
 
       const result = await syncOneRow(admin, instructorId, row)
 
@@ -172,9 +196,9 @@ export async function runSheetSync(options: {
     }
 
     let status: RunSheetSyncResult['status'] = 'success'
-    if (anyError || anyPartial) status = 'partial'
+    if (anyError || anyPartial || truncated) status = 'partial'
 
-    const errorSummary =
+    const rowIssues =
       anyError || anyPartial
         ? details
             .filter((d) => d.outcome === 'error' || d.outcome === 'partial')
@@ -182,6 +206,13 @@ export async function runSheetSync(options: {
             .slice(0, 20)
             .join('; ') || null
         : null
+
+    const batchNote = truncated
+      ? `Batch limit reached (${maxWorkRowsPerRun} row operations this run). Run sync again to continue.`
+      : null
+
+    const summaryParts = [batchNote, rowIssues].filter(Boolean)
+    const errorSummary = summaryParts.length ? summaryParts.join(' ') : null
 
     await admin
       .from('sheet_sync_runs')
@@ -192,7 +223,7 @@ export async function runSheetSync(options: {
         rows_ok: rowsOk,
         rows_skipped: rowsSkipped,
         error_summary: errorSummary,
-        details: { rows: details },
+        details: { rows: details, truncated, workRowsProcessed, maxWorkRowsPerRun },
       })
       .eq('id', runId)
 
@@ -202,6 +233,9 @@ export async function runSheetSync(options: {
       rowsTotal,
       rowsOk,
       rowsSkipped,
+      truncated,
+      workRowsProcessed,
+      maxWorkRowsPerRun,
       errorSummary,
       details: { rows: details },
     }

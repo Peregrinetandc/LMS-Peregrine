@@ -34,13 +34,19 @@ export function RunSheetSyncButton({ force = false, label }: Props) {
         rowsTotal?: number
         rowsOk?: number
         rowsSkipped?: number
+        truncated?: boolean
+        workRowsProcessed?: number
       }
       if (!res.ok) {
         setMessage({ type: 'err', text: data.error || `Request failed (${res.status})` })
       } else {
+        const more =
+          data.truncated === true
+            ? ' — more rows left: run sync again (batch limit).'
+            : ''
         setMessage({
           type: 'ok',
-          text: `${data.status}: processed ${data.rowsOk ?? 0}/${data.rowsTotal ?? 0}, skipped ${data.rowsSkipped ?? 0}`,
+          text: `${data.status}: processed ${data.rowsOk ?? 0}/${data.rowsTotal ?? 0}, skipped ${data.rowsSkipped ?? 0}${more}`,
         })
         router.refresh()
       }

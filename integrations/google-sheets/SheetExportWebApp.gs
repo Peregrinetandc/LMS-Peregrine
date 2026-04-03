@@ -20,9 +20,14 @@
  *
  * Response JSON:
  *   { spreadsheetId, sheetName, rows: [{ rowNumber, email, password, course_id, full_name }] }
+ *
+ * Data window: only rows EXPORT_DATA_START_ROW … SHEET_DATA_LAST_ROW (inclusive) are read.
+ * Raise SHEET_DATA_LAST_ROW if you add data below that row.
  */
 
 var EXPORT_DATA_START_ROW = 3;
+/** Last row that sync/fingerprint considers (spreadsheet may extend farther empty). */
+var SHEET_DATA_LAST_ROW = 200;
 var EXPORT_CANONICAL_MESSAGE_SUFFIX = 'sheet-export';
 var EXPORT_MAX_TIMESTAMP_SKEW_SEC = 300;
 
@@ -51,7 +56,7 @@ function readExportRows_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
   var name = sheet.getName();
-  var last = sheet.getLastRow();
+  var last = Math.min(sheet.getLastRow(), SHEET_DATA_LAST_ROW);
   var rows = [];
   for (var r = EXPORT_DATA_START_ROW; r <= last; r++) {
     rows.push({

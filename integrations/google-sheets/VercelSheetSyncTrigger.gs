@@ -21,10 +21,18 @@
  *   3. Check Executions / logs if needed.
  *
  * Manual full sync (ignores fingerprint): run forceVercelSheetSyncNow()
+ *
+ * If Vercel returns JSON { truncated: true }, the run stopped early (batch limit).
+ * We do NOT save LAST_SHEET_SYNC_FINGERPRINT so the next hourly tick POSTs again.
+ *
+ * Fingerprint only scans rows TRIGGER_DATA_START_ROW … SHEET_DATA_LAST_ROW (keep in sync
+ * with SheetExportWebApp.gs SHEET_DATA_LAST_ROW).
  */
 
 var TRIGGER_DATA_START_ROW = 3;
 var TRIGGER_DATA_NUM_COLS = 4;
+/** Must match SheetExportWebApp.gs SHEET_DATA_LAST_ROW. */
+var SHEET_DATA_LAST_ROW = 200;
 var PROP_VERCEL_URL = 'VERCEL_SYNC_URL';
 var PROP_TRIGGER_SECRET = 'SHEET_SYNC_TRIGGER_SECRET';
 var PROP_LAST_FINGERPRINT = 'LAST_SHEET_SYNC_FINGERPRINT';
@@ -45,7 +53,7 @@ function bytesToHexDigest_(bytes) {
 function computeSheetSyncFingerprint_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
-  var lastRow = sheet.getLastRow();
+  var lastRow = Math.min(sheet.getLastRow(), SHEET_DATA_LAST_ROW);
   var header =
     String(ss.getId()) + '\u0002' + String(sheet.getName()) + '\u0002';
   if (lastRow < TRIGGER_DATA_START_ROW) {
@@ -82,6 +90,29 @@ function getVercelTriggerProps_() {
 }
 
 /**
+ * On HTTP 2xx: save fingerprint only when the server finished all pending work (!truncated).
+ */
+function finishVercelSyncResponse_(props, fp, code, body) {
+  if (code < 200 || code >= 300) {
+    Logger.log('Vercel sync failed HTTP ' + code + ': ' + (body.length > 500 ? body.substring(0, 500) + '…' : body));
+    return;
+  }
+  var truncated = false;
+  try {
+    var j = JSON.parse(body);
+    truncated = j.truncated === true;
+  } catch (ignore) {}
+  if (truncated) {
+    Logger.log(
+      'Vercel sync OK but truncated — fingerprint not saved. Run again on next hour or trigger manually.',
+    );
+    return;
+  }
+  props.setProperty(PROP_LAST_FINGERPRINT, fp);
+  Logger.log('Vercel sync OK (HTTP ' + code + '). Fingerprint saved.');
+}
+
+/**
  * Hourly trigger target: POST to Vercel only if sheet content changed.
  */
 function hourlyVercelSyncIfChanged() {
@@ -111,14 +142,7 @@ function hourlyVercelSyncIfChanged() {
     },
     muteHttpExceptions: true,
   });
-  var code = res.getResponseCode();
-  var body = res.getContentText();
-  if (code >= 200 && code < 300) {
-    o.props.setProperty(PROP_LAST_FINGERPRINT, fp);
-    Logger.log('Vercel sync OK (HTTP ' + code + '). Fingerprint saved.');
-  } else {
-    Logger.log('Vercel sync failed HTTP ' + code + ': ' + (body.length > 500 ? body.substring(0, 500) + '…' : body));
-  }
+  finishVercelSyncResponse_(o.props, fp, res.getResponseCode(), res.getContentText());
 }
 
 /**
@@ -136,12 +160,10 @@ function forceVercelSheetSyncNow() {
   });
   var code = res.getResponseCode();
   var body = res.getContentText();
-  if (code >= 200 && code < 300) {
-    o.props.setProperty(PROP_LAST_FINGERPRINT, fp);
-    Logger.log('Force Vercel sync OK (HTTP ' + code + ')');
-  } else {
+  if (code < 200 || code >= 300) {
     throw new Error('Vercel sync failed HTTP ' + code + ': ' + body);
   }
+  finishVercelSyncResponse_(o.props, fp, code, body);
 }
 
 /**

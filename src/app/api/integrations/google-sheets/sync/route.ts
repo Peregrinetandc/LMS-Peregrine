@@ -5,6 +5,12 @@ import { runSheetSync } from '@/lib/integrations/google-sheets/syncFromRows'
 
 export const runtime = 'nodejs'
 
+/**
+ * Vercel / Next: platform max (e.g. 300s on Pro). Reduce load per request with
+ * env SHEET_SYNC_MAX_WORK_ROWS (default 25; idempotent skips do not count).
+ */
+export const maxDuration = 300
+
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false
   let out = 0
