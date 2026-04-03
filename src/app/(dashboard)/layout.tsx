@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { DashboardLearnerWidgets } from '@/components/internship/DashboardLearnerWidgets'
-import { LogOut } from 'lucide-react'
+import { LogOut, Sparkles } from 'lucide-react'
 import DashboardNavDrawer from '@/components/DashboardNavDrawer'
 
 export default async function DashboardLayout({
@@ -36,9 +36,6 @@ export default async function DashboardLayout({
     ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
     ...(isInstructor ? [{ href: '/admin/internship', label: 'Session Logs', icon: 'internship' as const }] : []),
     ...(isAdmin ? [{ href: '/admin/offline-cards', label: 'Import ID cards', icon: 'importIdCards' as const }] : []),
-    ...(isAdmin
-      ? [{ href: '/dashboard/admin/sheet-sync-log', label: 'Sheet sync log', icon: 'sheetSync' as const }]
-      : []),
     // ...(isAdmin ? [{ href: '/admin/users', label: 'Users', icon: 'users' as const }] : []),
   ]
 
@@ -75,6 +72,16 @@ export default async function DashboardLayout({
                   {role}
                 </span>
               </div>
+              <a
+                href="https://ai.peregrinehub.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Peregrine AI"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-violet-600 transition hover:bg-violet-50 hover:text-violet-800"
+              >
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span className="hidden text-sm font-semibold sm:inline">AI</span>
+              </a>
               <form action="/auth/signout" method="post" className="hidden sm:block">
                 <button
                   type="submit"

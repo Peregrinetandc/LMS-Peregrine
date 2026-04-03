@@ -16,6 +16,7 @@ import {
   PlusCircle,
   QrCode,
   UserCheck,
+  Sparkles,
   Users,
   X,
 } from 'lucide-react'
@@ -35,7 +36,10 @@ type NavItem = {
     | 'users'
     | 'importIdCards'
     | 'sheetSync'
+    | 'aiExternal'
 }
+
+const PEREGRINE_AI_HREF = 'https://ai.peregrinehub.com/'
 
 export default function DashboardNavDrawer({
   name,
@@ -48,6 +52,18 @@ export default function DashboardNavDrawer({
 }) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  const drawerLinks: NavItem[] =
+    role === 'admin'
+      ? [
+          ...links,
+          {
+            href: '/dashboard/admin/sheet-sync-log',
+            label: 'Sheet sync log',
+            icon: 'sheetSync' as const,
+          },
+        ]
+      : links
 
   useEffect(() => {
     setMounted(true)
@@ -94,6 +110,8 @@ export default function DashboardNavDrawer({
         return <FileUp className="h-4 w-4" />
       case 'sheetSync':
         return <FileSpreadsheet className="h-4 w-4" />
+      case 'aiExternal':
+        return <Sparkles className="h-4 w-4" />
       default:
         return <BookOpen className="h-4 w-4" />
     }
@@ -137,7 +155,7 @@ export default function DashboardNavDrawer({
             </div>
 
             <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-              {links.map((item) => (
+              {drawerLinks.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -148,6 +166,16 @@ export default function DashboardNavDrawer({
                   {item.label}
                 </Link>
               ))}
+              <a
+                href={PEREGRINE_AI_HREF}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOpen(false)}
+                className="flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
+              >
+                {iconFor('aiExternal')}
+                Peregrine AI
+              </a>
             </nav>
 
             <div className="border-t border-slate-100 p-3">
