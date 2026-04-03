@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CLIENT_INACTIVITY_MS,
-  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_INTERVAL_MS_TAB_HIDDEN_THROTTLE,
+  HEARTBEAT_INTERVAL_MS_VISIBLE,
   MAX_DAILY_ACTIVE_SECONDS,
   PING_CHALLENGE_MAX_MS,
   PING_CHALLENGE_MIN_MS,
@@ -307,9 +308,14 @@ export default function InternshipTimerWidget() {
 
   useEffect(() => {
     if (!session || session.status === 'ENDED') return
-    const id = setInterval(() => void sendHeartbeatRef.current(), HEARTBEAT_INTERVAL_MS)
+    const useFastHeartbeat =
+      session.status === 'ON_BREAK' || tabVisibleRef.current
+    const intervalMs = useFastHeartbeat
+      ? HEARTBEAT_INTERVAL_MS_VISIBLE
+      : HEARTBEAT_INTERVAL_MS_TAB_HIDDEN_THROTTLE
+    const id = setInterval(() => void sendHeartbeatRef.current(), intervalMs)
     return () => clearInterval(id)
-  }, [session?.id, session?.status])
+  }, [session?.id, session?.status, visibilityEpoch])
 
   useEffect(() => {
     if (!session || session.status === 'ENDED') return
