@@ -4,7 +4,9 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { DashboardLearnerWidgets } from '@/components/internship/DashboardLearnerWidgets'
 import { LogOut, Sparkles } from 'lucide-react'
-import DashboardNavDrawer from '@/components/DashboardNavDrawer'
+import DashboardNavDrawer, { type NavLinkSections } from '@/components/DashboardNavDrawer'
+
+const PEREGRINE_AI_HREF = 'https://ai.peregrinehub.com/'
 
 export default async function DashboardLayout({
   children,
@@ -26,20 +28,29 @@ export default async function DashboardLayout({
 
   const isInstructor = role === 'instructor' || role === 'admin'
   const isAdmin = role === 'admin'
-  const navLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' as const },
-    { href: '/courses', label: isInstructor ? 'All Courses' : 'My Courses', icon: 'courses' as const },
-    ...(isInstructor ? [{ href: '/grading', label: 'Grading', icon: 'grading' as const }] : []),
-    ...(isInstructor ? [{ href: '/attendance', label: 'Attendance', icon: 'attendance' as const }] : []),
-    ...(isInstructor ? [{ href: '/attendance-report', label: 'Attendance Report', icon: 'attendanceReport' as const }] : []),
-    ...(isInstructor ? [{ href: '/attendance/bind-cards', label: 'Bind ID cards', icon: 'bindIdCards' as const }] : []),
-    ...(isInstructor
-      ? [{ href: '/attendance/learner-id-lookup', label: 'Learner ID lookup', icon: 'learnerIdLookup' as const }]
-      : []),
-    ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
-    ...(isInstructor ? [{ href: '/admin/internship', label: 'Session Logs', icon: 'internship' as const }] : []),
-    ...(isAdmin ? [{ href: '/admin/offline-cards', label: 'Import ID cards', icon: 'importIdCards' as const }] : []),
-    // ...(isAdmin ? [{ href: '/admin/users', label: 'Users', icon: 'users' as const }] : []),
+  const navSections: NavLinkSections = [
+    [
+      { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+      { href: '/courses', label: isInstructor ? 'All Courses' : 'My Courses', icon: 'courses' },
+      ...(isInstructor ? [{ href: '/grading', label: 'Grading', icon: 'grading' as const }] : []),
+      ...(isInstructor ? [{ href: '/attendance', label: 'Attendance', icon: 'attendance' as const }] : []),
+      ...(isInstructor ? [{ href: '/attendance-report', label: 'Attendance Report', icon: 'attendanceReport' as const }] : []),
+    ],
+    [
+      ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
+      ...(isAdmin ? [{ href: '/admin/add-instructor', label: 'Add Instructor', icon: 'addInstructor' as const }] : []),
+    ],
+    [
+      ...(isInstructor ? [{ href: '/attendance/learner-id-lookup', label: 'Learner ID Lookup', icon: 'learnerIdLookup' as const }] : []),
+      ...(isInstructor ? [{ href: '/attendance/bind-cards', label: 'Bind ID Cards', icon: 'bindIdCards' as const }] : []),
+      ...(isAdmin ? [{ href: '/admin/offline-cards', label: 'Import ID Cards', icon: 'importIdCards' as const }] : []),
+      ...(isAdmin ? [{ href: '/dashboard/admin/sheet-sync-log', label: 'Sheet Sync Log', icon: 'sheetSync' as const }] : []),
+    ],
+    [
+      ...(isInstructor ? [{ href: '/admin/internship', label: 'Session Logs', icon: 'internship' as const }] : []),
+      { href: PEREGRINE_AI_HREF, label: 'Peregrine AI', icon: 'aiExternal', external: true },
+    ],
+    // Admin-only example: ...(isAdmin ? [{ href: '/admin/users', label: 'Users', icon: 'users' as const }] : []),
   ]
 
   return (
@@ -76,7 +87,7 @@ export default async function DashboardLayout({
                 </span>
               </div>
               <a
-                href="https://ai.peregrinehub.com/"
+                href={PEREGRINE_AI_HREF}
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Peregrine AI"
@@ -94,7 +105,7 @@ export default async function DashboardLayout({
                   <LogOut className="h-4 w-4" />
                 </button>
               </form>
-              <DashboardNavDrawer name={name} role={role} links={navLinks} />
+              <DashboardNavDrawer name={name} role={role} sections={navSections} />
             </div>
           </div>
         </div>

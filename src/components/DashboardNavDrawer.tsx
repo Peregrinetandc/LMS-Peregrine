@@ -23,9 +23,11 @@ import {
   X,
 } from 'lucide-react'
 
-type NavItem = {
+export type NavItem = {
   href: string
   label: string
+  /** Opens in a new tab (e.g. external product URL). */
+  external?: boolean
   icon:
     | 'dashboard'
     | 'courses'
@@ -43,36 +45,19 @@ type NavItem = {
     | 'addInstructor'
 }
 
-const PEREGRINE_AI_HREF = 'https://ai.peregrinehub.com/'
+export type NavLinkSections = NavItem[][]
 
 export default function DashboardNavDrawer({
   name,
   role,
-  links,
+  sections,
 }: {
   name: string
   role: string
-  links: NavItem[]
+  sections: NavLinkSections
 }) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
-
-  const drawerLinks: NavItem[] =
-    role === 'admin'
-      ? [
-          ...links,
-          {
-            href: '/admin/add-instructor',
-            label: 'Add instructor',
-            icon: 'addInstructor' as const,
-          },
-          {
-            href: '/dashboard/admin/sheet-sync-log',
-            label: 'Sheet sync log',
-            icon: 'sheetSync' as const,
-          },
-        ]
-      : links
 
   useEffect(() => {
     setMounted(true)
@@ -95,7 +80,7 @@ export default function DashboardNavDrawer({
     }
   }, [open])
 
-  const iconFor = (icon: NavItem['icon']) => {
+  function iconFor(icon: NavItem['icon']) {
     switch (icon) {
       case 'dashboard':
         return <LayoutDashboard className="h-4 w-4" />
@@ -128,6 +113,34 @@ export default function DashboardNavDrawer({
       default:
         return <BookOpen className="h-4 w-4" />
     }
+  }
+
+  const nonEmptySections = sections.filter((s) => s.length > 0)
+
+  function renderItem(item: NavItem) {
+    return item.external ? (
+      <a
+        key={`${item.href}-${item.label}`}
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => setOpen(false)}
+        className="flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
+      >
+        {iconFor(item.icon)}
+        {item.label}
+      </a>
+    ) : (
+      <Link
+        key={`${item.href}-${item.label}`}
+        href={item.href}
+        onClick={() => setOpen(false)}
+        className="flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+      >
+        {iconFor(item.icon)}
+        {item.label}
+      </Link>
+    )
   }
 
   return (
@@ -168,27 +181,12 @@ export default function DashboardNavDrawer({
             </div>
 
             <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-              {drawerLinks.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  {iconFor(item.icon)}
-                  {item.label}
-                </Link>
+              {nonEmptySections.map((section, si) => (
+                <div key={si} className="space-y-1">
+                  {si > 0 && <hr className="my-2 border-0 border-t border-slate-200" aria-hidden />}
+                  {section.map((item) => renderItem(item))}
+                </div>
               ))}
-              <a
-                href={PEREGRINE_AI_HREF}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setOpen(false)}
-                className="flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
-              >
-                {iconFor('aiExternal')}
-                Peregrine AI
-              </a>
             </nav>
 
             <div className="border-t border-slate-100 p-3">
