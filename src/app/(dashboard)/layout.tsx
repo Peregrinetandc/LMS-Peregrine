@@ -25,33 +25,41 @@ export default async function DashboardLayout({
 
   const role = profile?.role ?? 'learner'
   const name = profile?.full_name ?? user.email ?? 'User'
+  const roleLabel = role === 'card_coordinator' ? 'Card coordinator' : role
 
   const isInstructor = role === 'instructor' || role === 'admin'
   const isAdmin = role === 'admin'
-  const navSections: NavLinkSections = [
-    [
-      { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { href: '/courses', label: isInstructor ? 'All Courses' : 'My Courses', icon: 'courses' },
-      ...(isInstructor ? [{ href: '/grading', label: 'Grading', icon: 'grading' as const }] : []),
-      ...(isInstructor ? [{ href: '/attendance', label: 'Attendance', icon: 'attendance' as const }] : []),
-      ...(isInstructor ? [{ href: '/attendance-report', label: 'Attendance Report', icon: 'attendanceReport' as const }] : []),
-    ],
-    [
-      ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
-      ...(isAdmin ? [{ href: '/admin/add-instructor', label: 'Add Instructor', icon: 'addInstructor' as const }] : []),
-    ],
-    [
-      ...(isInstructor ? [{ href: '/attendance/learner-id-lookup', label: 'Learner ID Lookup', icon: 'learnerIdLookup' as const }] : []),
-      ...(isInstructor ? [{ href: '/attendance/bind-cards', label: 'Bind ID Cards', icon: 'bindIdCards' as const }] : []),
-      ...(isAdmin ? [{ href: '/admin/offline-cards', label: 'Import ID Cards', icon: 'importIdCards' as const }] : []),
-      ...(isAdmin ? [{ href: '/dashboard/admin/sheet-sync-log', label: 'Sheet Sync Log', icon: 'sheetSync' as const }] : []),
-    ],
-    [
-      ...(isInstructor ? [{ href: '/admin/internship', label: 'Session Logs', icon: 'internship' as const }] : []),
-      { href: PEREGRINE_AI_HREF, label: 'Peregrine AI', icon: 'aiExternal', external: true },
-    ],
-    // Admin-only example: ...(isAdmin ? [{ href: '/admin/users', label: 'Users', icon: 'users' as const }] : []),
-  ]
+  const isCardCoordinator = role === 'card_coordinator'
+
+  const navSections: NavLinkSections = isCardCoordinator
+    ? [
+        [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }],
+        [{ href: '/attendance/bind-cards', label: 'Bind ID Cards', icon: 'bindIdCards' }],
+        [{ href: PEREGRINE_AI_HREF, label: 'Peregrine AI', icon: 'aiExternal', external: true }],
+      ]
+    : [
+        [
+          { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+          { href: '/courses', label: isInstructor ? 'All Courses' : 'My Courses', icon: 'courses' },
+          ...(isInstructor ? [{ href: '/grading', label: 'Grading', icon: 'grading' as const }] : []),
+          ...(isInstructor ? [{ href: '/attendance', label: 'Attendance', icon: 'attendance' as const }] : []),
+          ...(isInstructor ? [{ href: '/attendance-report', label: 'Attendance Report', icon: 'attendanceReport' as const }] : []),
+        ],
+        [
+          ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
+          ...(isAdmin ? [{ href: '/admin/add-instructor', label: 'Add Instructor', icon: 'addInstructor' as const }] : []),
+        ],
+        [
+          ...(isInstructor ? [{ href: '/attendance/learner-id-lookup', label: 'Learner ID Lookup', icon: 'learnerIdLookup' as const }] : []),
+          ...(isInstructor ? [{ href: '/attendance/bind-cards', label: 'Bind ID Cards', icon: 'bindIdCards' as const }] : []),
+          ...(isAdmin ? [{ href: '/admin/offline-cards', label: 'Import ID Cards', icon: 'importIdCards' as const }] : []),
+          ...(isAdmin ? [{ href: '/dashboard/admin/sheet-sync-log', label: 'Sheet Sync Log', icon: 'sheetSync' as const }] : []),
+        ],
+        [
+          ...(isInstructor ? [{ href: '/admin/internship', label: 'Session Logs', icon: 'internship' as const }] : []),
+          { href: PEREGRINE_AI_HREF, label: 'Peregrine AI', icon: 'aiExternal', external: true },
+        ],
+      ]
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -76,14 +84,16 @@ export default async function DashboardLayout({
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-sm font-semibold text-slate-800">{name}</span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                   isAdmin
-                    ? 'bg-red-100 text-red-700'
-                    : isInstructor
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'bg-blue-100 text-blue-700'
+                    ? 'bg-red-100 text-red-700 capitalize'
+                    : isCardCoordinator
+                      ? 'bg-amber-100 text-amber-900'
+                      : isInstructor
+                        ? 'bg-purple-100 text-purple-700 capitalize'
+                        : 'bg-blue-100 text-blue-700 capitalize'
                 }`}>
-                  {role}
+                  {roleLabel}
                 </span>
               </div>
               <a
@@ -105,7 +115,7 @@ export default async function DashboardLayout({
                   <LogOut className="h-4 w-4" />
                 </button>
               </form>
-              <DashboardNavDrawer name={name} role={role} sections={navSections} />
+              <DashboardNavDrawer name={name} role={roleLabel} sections={navSections} />
             </div>
           </div>
         </div>

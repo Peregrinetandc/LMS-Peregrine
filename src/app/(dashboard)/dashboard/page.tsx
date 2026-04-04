@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil } from 'lucide-react'
+import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil, ArrowRight } from 'lucide-react'
 import { AppButton, AppCard, EmptyState, PageHeader } from '@/components/ui/primitives'
 
 export default async function DashboardPage() {
@@ -20,6 +20,27 @@ export default async function DashboardPage() {
   const name = profile?.full_name ?? user.email?.split('@')[0] ?? 'there'
   const isAdmin = role === 'admin'
   const isInstructor = role === 'instructor' || role === 'admin'
+
+  if (role === 'card_coordinator') {
+    return (
+      <div className="space-y-4 px-2 py-2">
+        <PageHeader title={`Welcome, ${name}!`} description="Card coordinator" />
+        <AppCard className="p-6 space-y-3">
+          <p className="text-slate-700">
+            Use <strong>Bind ID cards</strong> in the menu to assign printed learner cards for any course. You can
+            bind cards across courses; unbinding is limited to instructors and admins.
+          </p>
+          <Link
+            href="/attendance/bind-cards"
+            className="border border-blue-600 rounded-lg px-4 py-2 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Go to Bind ID cards
+          </Link>
+        </AppCard>
+      </div>
+    )
+  }
 
   // ── Learner data ─────────────────────────────────────────────
   const { data: enrollments } = await supabase

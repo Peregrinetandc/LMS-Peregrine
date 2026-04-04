@@ -1,7 +1,7 @@
 -- ============================================================
 -- Peregrine T&C – Full database schema (baseline + migrations)
 -- Source of truth: mirrors supabase/migrations/*.sql through
--- 20260403140000_sheet_sync_logs.sql
+-- 20260404120000_card_coordinator_role.sql
 -- Use: Supabase SQL Editor for a greenfield project, or compare
 -- against `supabase db dump` / migration history.
 -- Then run supabase/seed.sql (see that file for production vs demo usage).
@@ -13,7 +13,7 @@ create extension if not exists "pgcrypto";
 -- ──────────────────────────────────────────────
 -- 1. PROFILES (extends auth.users)
 -- ──────────────────────────────────────────────
-create type user_role as enum ('admin', 'instructor', 'learner');
+create type user_role as enum ('admin', 'instructor', 'learner', 'card_coordinator');
 
 create table public.profiles (
   id            uuid primary key references auth.users on delete cascade,
@@ -436,6 +436,23 @@ revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_admin() to service_role;
 
+create or replace function public.is_card_coordinator()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role = 'card_coordinator'::public.user_role
+  );
+$$;
+
+revoke all on function public.is_card_coordinator() from public;
+grant execute on function public.is_card_coordinator() to authenticated;
+grant execute on function public.is_card_coordinator() to service_role;
+
 -- ──────────────────────────────────────────────
 -- ROW LEVEL SECURITY
 -- ──────────────────────────────────────────────
@@ -832,6 +849,11 @@ create policy "Admins view all enrollments" on public.enrollments
   to authenticated
   using (public.is_admin());
 
+create policy "Card coordinators view all enrollments" on public.enrollments
+  for select
+  to authenticated
+  using (public.is_card_coordinator());
+
 -- Submissions: learners CRUD own rows; course instructors can read (grading)
 drop policy if exists "Learners manage own submissions" on public.submissions;
 
@@ -928,6 +950,11 @@ create policy "Admins view all courses" on public.courses
   for select to authenticated
   using (public.is_admin());
 
+create policy "Card coordinators view all courses" on public.courses
+  for select
+  to authenticated
+  using (public.is_card_coordinator());
+
 create policy "Staff view learner profiles" on public.profiles
   for select to authenticated
   using (
@@ -943,6 +970,10 @@ create policy "Staff view learner profiles" on public.profiles
       join public.modules m on m.id = a.module_id
       join public.courses c on c.id = m.course_id
       where s.learner_id = profiles.id and c.instructor_id = auth.uid()
+    )
+    or (
+      public.is_card_coordinator()
+      and exists (select 1 from public.enrollments e where e.learner_id = profiles.id)
     )
   );
 
@@ -1073,6 +1104,29 @@ create trigger offline_learner_id_cards_touch_updated_at
   for each row
   execute function public.touch_offline_learner_id_cards_updated_at();
 
+create or replace function public.offline_learner_id_cards_block_coordinator_unbind()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.learner_id is not null
+     and new.learner_id is null
+     and public.is_card_coordinator() then
+    raise exception 'card coordinators cannot unbind id cards';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.offline_learner_id_cards_block_coordinator_unbind() from public;
+
+create trigger offline_learner_id_cards_block_coordinator_unbind
+  before update on public.offline_learner_id_cards
+  for each row
+  execute function public.offline_learner_id_cards_block_coordinator_unbind();
+
 alter table public.offline_learner_id_cards enable row level security;
 
 create policy "Learners read own offline id card"
@@ -1087,6 +1141,7 @@ create policy "Staff read offline id cards"
   to authenticated
   using (
     public.is_admin()
+    or public.is_card_coordinator()
     or (
       course_id is null
       or exists (
@@ -1133,6 +1188,13 @@ create policy "Instructors update offline id cards for their courses"
       )
     )
   );
+
+create policy "Card coordinators update offline id cards for binding"
+  on public.offline_learner_id_cards
+  for update
+  to authenticated
+  using (public.is_card_coordinator())
+  with check (public.is_card_coordinator());
 
 create or replace function public.mint_offline_id_cards(
   p_count int,

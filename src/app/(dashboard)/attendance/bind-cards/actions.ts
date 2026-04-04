@@ -19,7 +19,7 @@ async function requireStaffAndCourseAccess(courseId: string) {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin') {
+  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
 
@@ -27,7 +27,7 @@ async function requireStaffAndCourseAccess(courseId: string) {
   if (!course) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
-  if (role !== 'admin' && course.instructor_id !== user.id) {
+  if (role !== 'admin' && role !== 'card_coordinator' && course.instructor_id !== user.id) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
 
@@ -50,7 +50,7 @@ export async function lookupOfflineIdCard(publicCode: string): Promise<LookupOff
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin') {
+  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
     return { ok: false, code: 'FORBIDDEN', message: 'You do not have access.' }
   }
 
@@ -200,6 +200,10 @@ export async function unbindOfflineIdCard(input: {
   }
 
   const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (prof?.role === 'card_coordinator') {
+    return { ok: false, code: 'FORBIDDEN', message: 'Card coordinators cannot unbind ID cards.' }
+  }
+
   const isAdmin = prof?.role === 'admin'
 
   const { data: card, error: cardErr } = await supabase

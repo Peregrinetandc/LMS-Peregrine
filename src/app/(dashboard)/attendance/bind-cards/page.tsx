@@ -13,12 +13,12 @@ export default async function BindOfflineIdCardsPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
   const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin') {
+  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
     redirect('/unauthorized')
   }
 
   let coursesQuery = supabase.from('courses').select('id, title, course_code').order('title')
-  if (role !== 'admin') {
+  if (role !== 'admin' && role !== 'card_coordinator') {
     coursesQuery = coursesQuery.eq('instructor_id', user.id)
   }
   const { data: courses } = await coursesQuery
@@ -31,7 +31,11 @@ export default async function BindOfflineIdCardsPage() {
         description="Assign printed offline cards to enrolled learners."
       />
       <AppCard className="p-2">
-        <BindCardsClient courses={courseList} isAdmin={role === 'admin'} />
+        <BindCardsClient
+          courses={courseList}
+          allowUnbind={role === 'admin' || role === 'instructor'}
+          isAdmin={role === 'admin'}
+        />
       </AppCard>
     </div>
   )

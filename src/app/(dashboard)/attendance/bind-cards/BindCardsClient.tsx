@@ -46,9 +46,13 @@ function learnerSelectedSummary(u: LearnerOption): string {
 
 export default function BindCardsClient({
   courses,
+  allowUnbind,
   isAdmin,
 }: {
   courses: AttendanceCourseOption[]
+  /** Instructors and admins may unbind; card coordinators may not. */
+  allowUnbind: boolean
+  /** Admins may unbind without matching the bound course in the dropdown. */
   isAdmin: boolean
 }) {
   const readerDomId = useId().replace(/:/g, '')
@@ -407,6 +411,7 @@ export default function BindCardsClient({
   }
 
   async function runUnbind() {
+    if (!allowUnbind) return
     setLookupErr(null)
     setBindActionMessage(null)
     if (!online) {
@@ -454,6 +459,7 @@ export default function BindCardsClient({
     previewLookup.learnerId !== learnerPick?.id
 
   const canUnbind =
+    allowUnbind &&
     online &&
     previewLookup?.ok === true &&
     previewLookup.status === 'bound' &&
@@ -462,6 +468,7 @@ export default function BindCardsClient({
     (isAdmin || previewLookup.courseId === courseId)
 
   const unbindCourseHint =
+    allowUnbind &&
     previewLookup?.ok &&
     previewLookup.status === 'bound' &&
     !isAdmin &&
@@ -613,7 +620,9 @@ export default function BindCardsClient({
       </section>
 
       <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-800">3. Bind or unbind</h2>
+        <h2 className="text-sm font-semibold text-slate-800">
+          {allowUnbind ? '3. Bind or unbind' : '3. Bind'}
+        </h2>
         {previewLookup?.ok && (
           <div className="rounded-lg px-3 py-2 text-sm bg-slate-50 border border-slate-200 space-y-1">
             <p>
@@ -672,7 +681,8 @@ export default function BindCardsClient({
         )}
         {!online && (
           <p className="text-xs text-amber-800">
-            You are offline — Confirm bind will queue for sync. Unbind needs a connection.
+            You are offline — Confirm bind will queue for sync.
+            {allowUnbind ? ' Unbind needs a connection.' : ''}
           </p>
         )}
         {unbindCourseHint && (
