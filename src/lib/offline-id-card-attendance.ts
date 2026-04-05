@@ -6,7 +6,7 @@ export type ResolveBoundLearnerResult =
   | { ok: false; code: string; message: string }
 
 /**
- * Resolve a bound physical ID card to a learner for the given course (bind rules).
+ * Resolve a bound physical ID card to a learner for the given course (must be enrolled).
  */
 export async function resolveBoundLearnerForCourse(
   supabase: SupabaseClient,
@@ -20,7 +20,7 @@ export async function resolveBoundLearnerForCourse(
 
   const { data: card, error } = await supabase
     .from('offline_learner_id_cards')
-    .select('learner_id, course_id')
+    .select('learner_id')
     .eq('public_code', normalized)
     .maybeSingle()
 
@@ -34,14 +34,25 @@ export async function resolveBoundLearnerForCourse(
     return { ok: false, code: 'NOT_BOUND', message: 'This card is not bound to a learner.' }
   }
 
-  const existingCourseId = card.course_id as string | null
-  if (existingCourseId != null && existingCourseId !== courseId) {
+  const learnerId = card.learner_id as string
+
+  const { data: enrollment, error: enrErr } = await supabase
+    .from('enrollments')
+    .select('id')
+    .eq('course_id', courseId)
+    .eq('learner_id', learnerId)
+    .maybeSingle()
+
+  if (enrErr) {
+    return { ok: false, code: 'DB_ERROR', message: enrErr.message }
+  }
+  if (!enrollment) {
     return {
       ok: false,
-      code: 'COURSE_MISMATCH',
-      message: 'This card is reserved for a different course.',
+      code: 'NOT_ENROLLED',
+      message: 'This learner is not enrolled in the selected course.',
     }
   }
 
-  return { ok: true, learnerId: card.learner_id as string }
+  return { ok: true, learnerId }
 }

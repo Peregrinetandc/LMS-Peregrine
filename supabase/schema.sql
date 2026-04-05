@@ -1097,7 +1097,6 @@ revoke all on function public._offline_random_segment(int) from public;
 create table public.offline_learner_id_cards (
   id uuid primary key default gen_random_uuid(),
   public_code text not null,
-  course_id uuid references public.courses(id) on delete set null,
   learner_id uuid references public.profiles(id) on delete set null,
   bound_at timestamptz,
   bound_by uuid references public.profiles(id) on delete set null,
@@ -1117,8 +1116,8 @@ create table public.offline_learner_id_cards (
 
 create unique index offline_learner_id_cards_public_code_key on public.offline_learner_id_cards (public_code);
 
-create unique index offline_learner_id_cards_learner_course_active_key
-  on public.offline_learner_id_cards (learner_id, course_id)
+create unique index offline_learner_id_cards_learner_active_key
+  on public.offline_learner_id_cards (learner_id)
   where learner_id is not null;
 
 create or replace function public.touch_offline_learner_id_cards_updated_at()
@@ -1176,11 +1175,12 @@ create policy "Staff read offline id cards"
     public.is_admin()
     or public.is_card_coordinator()
     or (
-      course_id is null
+      learner_id is null
       or exists (
         select 1
-        from public.courses c
-        where c.id = offline_learner_id_cards.course_id
+        from public.enrollments e
+        join public.courses c on c.id = e.course_id
+        where e.learner_id = offline_learner_id_cards.learner_id
           and c.instructor_id = auth.uid()
       )
     )
@@ -1200,11 +1200,12 @@ create policy "Instructors update offline id cards for their courses"
   using (
     not public.is_admin()
     and (
-      course_id is null
+      learner_id is null
       or exists (
         select 1
-        from public.courses c
-        where c.id = offline_learner_id_cards.course_id
+        from public.enrollments e
+        join public.courses c on c.id = e.course_id
+        where e.learner_id = offline_learner_id_cards.learner_id
           and c.instructor_id = auth.uid()
       )
     )
@@ -1212,11 +1213,16 @@ create policy "Instructors update offline id cards for their courses"
   with check (
     not public.is_admin()
     and (
-      course_id is null
+      (
+        learner_id is null
+        and bound_at is null
+        and bound_by is null
+      )
       or exists (
         select 1
-        from public.courses c
-        where c.id = offline_learner_id_cards.course_id
+        from public.enrollments e
+        join public.courses c on c.id = e.course_id
+        where e.learner_id = offline_learner_id_cards.learner_id
           and c.instructor_id = auth.uid()
       )
     )
@@ -1231,8 +1237,7 @@ create policy "Card coordinators update offline id cards for binding"
 
 create or replace function public.mint_offline_id_cards(
   p_count int,
-  p_batch_label text default null,
-  p_course_id uuid default null
+  p_batch_label text default null
 ) returns int
 language plpgsql
 security definer
@@ -1255,8 +1260,8 @@ begin
   while v_remaining > 0 loop
     v_code := 'ID-' || public._offline_random_segment(3) || '-' || public._offline_random_segment(3);
     begin
-      insert into public.offline_learner_id_cards (public_code, batch_label, course_id)
-      values (v_code, p_batch_label, p_course_id);
+      insert into public.offline_learner_id_cards (public_code, batch_label)
+      values (v_code, p_batch_label);
       v_inserted := v_inserted + 1;
       v_remaining := v_remaining - 1;
     exception
@@ -1269,8 +1274,8 @@ begin
 end;
 $$;
 
-revoke all on function public.mint_offline_id_cards(int, text, uuid) from public;
-grant execute on function public.mint_offline_id_cards(int, text, uuid) to authenticated;
+revoke all on function public.mint_offline_id_cards(int, text) from public;
+grant execute on function public.mint_offline_id_cards(int, text) to authenticated;
 
 -- Attendance: learners manage their own
 create policy "Learners manage their attendance" on public.attendance

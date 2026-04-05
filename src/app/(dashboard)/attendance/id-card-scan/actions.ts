@@ -174,24 +174,6 @@ export async function recordIdCardAttendanceScan(input: {
 
   const learnerId = resolved.learnerId
 
-  const { data: enr, error: enrErr } = await db
-    .from('enrollments')
-    .select('id')
-    .eq('course_id', input.courseId)
-    .eq('learner_id', learnerId)
-    .maybeSingle()
-
-  if (enrErr) {
-    return { ok: false, code: 'DB_ERROR', message: enrErr.message }
-  }
-  if (!enr) {
-    return {
-      ok: false,
-      code: 'NOT_ENROLLED',
-      message: 'This learner is not enrolled in the selected course.',
-    }
-  }
-
   const { data: rosterRow, error: rErr } = await db
     .from('module_session_roster')
     .select('id, is_present')

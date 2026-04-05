@@ -8,8 +8,6 @@ import {
 import { importOfflineIdCards, type ImportOfflineIdCardsResult } from './actions'
 import { Camera, X } from 'lucide-react'
 
-type CourseOption = { id: string; title: string; course_code: string }
-
 /** First column only: comma, tab, or simple "quoted" first field. */
 function firstColumnFromLine(line: string): string {
   const trimmed = line.trim()
@@ -51,11 +49,10 @@ function parseCodesFromText(text: string): string[] {
   return out
 }
 
-export default function ImportOfflineCardsClient({ courses }: { courses: CourseOption[] }) {
+export default function ImportOfflineCardsClient() {
   const readerDomId = useId().replace(/:/g, '')
   const [pasteText, setPasteText] = useState('')
   const [batchLabel, setBatchLabel] = useState('')
-  const [courseId, setCourseId] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanErr, setScanErr] = useState<string | null>(null)
   const scannerRef = useRef<{ stop: () => Promise<void> } | null>(null)
@@ -171,7 +168,6 @@ export default function ImportOfflineCardsClient({ courses }: { courses: CourseO
       const res = await importOfflineIdCards({
         codes: combined,
         batchLabel: batchLabel || null,
-        courseId: courseId || null,
       })
       setResult(res)
     } catch (err) {
@@ -188,31 +184,14 @@ export default function ImportOfflineCardsClient({ courses }: { courses: CourseO
     <div className="space-y-4">
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
         <h2 className="text-sm font-semibold text-slate-800">Batch options</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">Batch label (optional)</label>
-            <input
-              value={batchLabel}
-              onChange={(e) => setBatchLabel(e.target.value)}
-              placeholder="e.g. Spring 2026 print run"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">Pre-scope course (optional)</label>
-            <select
-              value={courseId}
-              onChange={(e) => setCourseId(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Any course (unscoped)</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title} ({c.course_code})
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="space-y-1 max-w-md">
+          <label className="text-xs font-medium text-slate-600">Batch label (optional)</label>
+          <input
+            value={batchLabel}
+            onChange={(e) => setBatchLabel(e.target.value)}
+            placeholder="e.g. Spring 2026 print run"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          />
         </div>
       </section>
 

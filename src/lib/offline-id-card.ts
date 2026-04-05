@@ -13,7 +13,6 @@ export type BindErrorCode =
   | 'CARD_NOT_FOUND'
   | 'ALREADY_BOUND'
   | 'NOT_BOUND'
-  | 'COURSE_MISMATCH'
   | 'DB_ERROR'
   | 'NOT_SIGNED_IN'
 
@@ -22,5 +21,5 @@ export type BindOfflineIdCardResult =
   | { ok: false; code: BindErrorCode; message: string }
 
 export type LookupOfflineIdCardResult =
-  | { ok: true; status: 'unbound' | 'bound'; courseId: string | null; learnerId: string | null }
+  | { ok: true; status: 'unbound' | 'bound'; learnerId: string | null }
   | { ok: false; code: BindErrorCode; message: string }

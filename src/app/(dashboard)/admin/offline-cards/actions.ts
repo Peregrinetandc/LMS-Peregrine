@@ -23,7 +23,6 @@ export type ImportOfflineIdCardsResult =
 export async function importOfflineIdCards(input: {
   codes: string[]
   batchLabel?: string | null
-  courseId?: string | null
 }): Promise<ImportOfflineIdCardsResult> {
   const supabase = await createClient()
   const {
@@ -62,16 +61,10 @@ export async function importOfflineIdCards(input: {
     validUnique.push(n)
   }
 
-  const courseId = input.courseId?.trim() || null
-  if (courseId) {
-    const { data: c } = await supabase.from('courses').select('id').eq('id', courseId).maybeSingle()
-    if (!c) return { ok: false, message: 'Invalid course.' }
-  }
-
   const batchLabel = input.batchLabel?.trim() || null
 
   let alreadyInDatabase = 0
-  const toInsert: { public_code: string; batch_label: string | null; course_id: string | null }[] = []
+  const toInsert: { public_code: string; batch_label: string | null }[] = []
 
   for (let i = 0; i < validUnique.length; i += LOOKUP_CHUNK) {
     const chunk = validUnique.slice(i, i + LOOKUP_CHUNK)
@@ -87,7 +80,7 @@ export async function importOfflineIdCards(input: {
       if (existingSet.has(code)) {
         alreadyInDatabase++
       } else {
-        toInsert.push({ public_code: code, batch_label: batchLabel, course_id: courseId })
+        toInsert.push({ public_code: code, batch_label: batchLabel })
       }
     }
   }

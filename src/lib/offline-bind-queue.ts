@@ -32,7 +32,6 @@ const NO_RETRY_CODES = new Set<string>([
   'CARD_NOT_FOUND',
   'ALREADY_BOUND',
   'NOT_BOUND',
-  'COURSE_MISMATCH',
 ])
 
 function openDb(): Promise<IDBDatabase> {

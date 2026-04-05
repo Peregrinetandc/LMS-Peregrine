@@ -56,7 +56,7 @@ export async function lookupOfflineIdCard(publicCode: string): Promise<LookupOff
 
   const { data: row, error } = await supabase
     .from('offline_learner_id_cards')
-    .select('course_id, learner_id')
+    .select('learner_id')
     .eq('public_code', normalized)
     .maybeSingle()
 
@@ -71,7 +71,6 @@ export async function lookupOfflineIdCard(publicCode: string): Promise<LookupOff
   return {
     ok: true,
     status: bound ? 'bound' : 'unbound',
-    courseId: (row.course_id as string | null) ?? null,
     learnerId: (row.learner_id as string | null) ?? null,
   }
 }
@@ -114,7 +113,7 @@ export async function bindOfflineIdCard(input: {
 
   const { data: card, error: cardErr } = await supabase
     .from('offline_learner_id_cards')
-    .select('id, course_id, learner_id')
+    .select('id, learner_id')
     .eq('public_code', normalized)
     .maybeSingle()
 
@@ -123,15 +122,6 @@ export async function bindOfflineIdCard(input: {
   }
   if (!card) {
     return { ok: false, code: 'CARD_NOT_FOUND', message: 'No card found for this code.' }
-  }
-
-  const existingCourseId = card.course_id as string | null
-  if (existingCourseId != null && existingCourseId !== input.courseId) {
-    return {
-      ok: false,
-      code: 'COURSE_MISMATCH',
-      message: 'This card is reserved for a different course.',
-    }
   }
 
   const existingLearnerId = card.learner_id as string | null
@@ -152,7 +142,6 @@ export async function bindOfflineIdCard(input: {
       learner_id: input.learnerId,
       bound_at: new Date().toISOString(),
       bound_by: user.id,
-      course_id: input.courseId,
     })
     .eq('public_code', normalized)
     .is('learner_id', null)
@@ -164,7 +153,8 @@ export async function bindOfflineIdCard(input: {
       return {
         ok: false,
         code: 'ALREADY_BOUND',
-        message: 'This learner already has a bound card for this course, or the card was just taken.',
+        message:
+          'This learner already has another card bound, or the card was just taken — refresh and try again.',
       }
     }
     return { ok: false, code: 'DB_ERROR', message: upErr.message }
@@ -181,7 +171,7 @@ export async function bindOfflineIdCard(input: {
   return { ok: true }
 }
 
-/** Clear bind fields and release card (course_id cleared so it returns to the global pool). */
+/** Clear bind fields and release card back to the pool. */
 export async function unbindOfflineIdCard(input: {
   publicCode: string
   courseId: string
@@ -208,7 +198,7 @@ export async function unbindOfflineIdCard(input: {
 
   const { data: card, error: cardErr } = await supabase
     .from('offline_learner_id_cards')
-    .select('learner_id, course_id')
+    .select('learner_id')
     .eq('public_code', normalized)
     .maybeSingle()
 
@@ -222,13 +212,22 @@ export async function unbindOfflineIdCard(input: {
     return { ok: false, code: 'NOT_BOUND', message: 'This card is not bound.' }
   }
 
-  const rowCourseId = card.course_id as string | null
   if (!isAdmin) {
-    if (!rowCourseId || rowCourseId !== input.courseId) {
+    const { data: enrollment, error: enrErr } = await supabase
+      .from('enrollments')
+      .select('id')
+      .eq('course_id', input.courseId)
+      .eq('learner_id', card.learner_id as string)
+      .maybeSingle()
+
+    if (enrErr) {
+      return { ok: false, code: 'DB_ERROR', message: enrErr.message }
+    }
+    if (!enrollment) {
       return {
         ok: false,
-        code: 'COURSE_MISMATCH',
-        message: 'Select the course this card was bound under, then try again.',
+        code: 'NOT_ENROLLED',
+        message: 'Select a course where this learner is enrolled, then unbind.',
       }
     }
   }
@@ -239,7 +238,6 @@ export async function unbindOfflineIdCard(input: {
       learner_id: null,
       bound_at: null,
       bound_by: null,
-      course_id: null,
     })
     .eq('public_code', normalized)
     .not('learner_id', 'is', null)

@@ -23,13 +23,12 @@ export type LookupLearnerByIdCardResult =
       ok: true
       bound: false
       publicCode: string
-      course: LearnerIdCourseInfo | null
     }
   | {
       ok: true
       bound: true
       publicCode: string
-      course: LearnerIdCourseInfo | null
+      enrolledCourses: LearnerIdCourseInfo[]
       learner: LearnerIdProfileInfo
     }
   | { ok: false; code: string; message: string }
@@ -56,14 +55,7 @@ export async function lookupLearnerByIdCard(publicCode: string): Promise<LookupL
 
   const { data: row, error } = await supabase
     .from('offline_learner_id_cards')
-    .select(
-      `
-      public_code,
-      course_id,
-      learner_id,
-      courses ( id, title, course_code )
-    `,
-    )
+    .select('public_code, learner_id')
     .eq('public_code', normalized)
     .maybeSingle()
 
@@ -74,31 +66,12 @@ export async function lookupLearnerByIdCard(publicCode: string): Promise<LookupL
     return { ok: false, code: 'CARD_NOT_FOUND', message: 'No card found for this code (or you cannot access it).' }
   }
 
-  const courseEmbed = row.courses as unknown
-  const courseRow = Array.isArray(courseEmbed) ? courseEmbed[0] : courseEmbed
-  const courseIdFallback = row.course_id as string | null
-  const course: LearnerIdCourseInfo | null =
-    courseRow &&
-    typeof courseRow === 'object' &&
-    courseRow !== null &&
-    'id' in courseRow &&
-    (courseRow as { id: unknown }).id
-      ? {
-          id: String((courseRow as { id: unknown }).id),
-          title: String((courseRow as { title?: unknown }).title ?? ''),
-          course_code: String((courseRow as { course_code?: unknown }).course_code ?? ''),
-        }
-      : courseIdFallback
-        ? { id: courseIdFallback, title: '(course unavailable)', course_code: '' }
-        : null
-
   const learnerId = row.learner_id as string | null
   if (!learnerId) {
     return {
       ok: true,
       bound: false,
       publicCode: normalized,
-      course,
     }
   }
 
@@ -120,11 +93,39 @@ export async function lookupLearnerByIdCard(publicCode: string): Promise<LookupL
     }
   }
 
+  const { data: enrRows, error: enrErr } = await supabase
+    .from('enrollments')
+    .select(
+      `
+      course_id,
+      courses ( id, title, course_code )
+    `,
+    )
+    .eq('learner_id', learnerId)
+
+  if (enrErr) {
+    return { ok: false, code: 'DB_ERROR', message: enrErr.message }
+  }
+
+  const enrolledCourses: LearnerIdCourseInfo[] = []
+  for (const r of enrRows ?? []) {
+    const embed = r.courses as unknown
+    const c = Array.isArray(embed) ? embed[0] : embed
+    if (c && typeof c === 'object' && c !== null && 'id' in c && (c as { id: unknown }).id) {
+      enrolledCourses.push({
+        id: String((c as { id: unknown }).id),
+        title: String((c as { title?: unknown }).title ?? ''),
+        course_code: String((c as { course_code?: unknown }).course_code ?? ''),
+      })
+    }
+  }
+  enrolledCourses.sort((a, b) => a.title.localeCompare(b.title))
+
   return {
     ok: true,
     bound: true,
     publicCode: normalized,
-    course,
+    enrolledCourses,
     learner: {
       id: learnerRow.id as string,
       full_name: learnerRow.full_name as string | null,

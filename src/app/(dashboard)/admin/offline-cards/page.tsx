@@ -15,17 +15,6 @@ export default async function AdminOfflineCardsImportPage() {
     redirect('/unauthorized')
   }
 
-  const { data: courses } = await supabase
-    .from('courses')
-    .select('id, title, course_code')
-    .order('title')
-
-  const courseList = (courses ?? []).map((c) => ({
-    id: c.id as string,
-    title: c.title as string,
-    course_code: c.course_code as string,
-  }))
-
   return (
     <div className="space-y-6 p-2">
       <PageHeader
@@ -33,7 +22,7 @@ export default async function AdminOfflineCardsImportPage() {
         description="Upload a CSV, paste codes, or scan ID cards to add cards to the pool."
       />
       <AppCard className="p-2">
-        <ImportOfflineCardsClient courses={courseList} />
+        <ImportOfflineCardsClient />
       </AppCard>
     </div>
   )

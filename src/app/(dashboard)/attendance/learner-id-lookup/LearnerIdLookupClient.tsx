@@ -90,8 +90,7 @@ export default function LearnerIdLookupClient() {
     }
   }, [normalizedCode])
 
-  function courseLine(c: { title: string; course_code: string } | null): string {
-    if (!c) return 'No course on file for this card.'
+  function courseLine(c: { title: string; course_code: string }): string {
     const t = c.title?.trim()
     const code = c.course_code?.trim()
     if (t && code) return `${t} (${code})`
@@ -165,16 +164,19 @@ export default function LearnerIdLookupClient() {
               <span className="font-mono">{result.publicCode}</span>
             </p>
             <p>
-              <span className="font-medium text-slate-700">Course on card:</span>{' '}
-              {courseLine(result.course)}
+              <span className="font-medium text-slate-700">Status:</span>{' '}
+              {!result.bound ? (
+                <span className="text-amber-900">Not bound — no learner on this card yet</span>
+              ) : (
+                <span className="text-emerald-800">Bound to a learner</span>
+              )}
             </p>
             {!result.bound ? (
               <p className="text-amber-900 pt-1">
-                This card is <span className="font-medium">not bound</span> to a learner yet. Bind it on the
-                Bind ID cards page.
+                Bind this card on the <span className="font-medium">Bind ID cards</span> page when ready.
               </p>
             ) : (
-              <div className="pt-1 space-y-1 border-t border-slate-200 mt-2 pt-2">
+              <div className="pt-1 space-y-2 border-t border-slate-200 mt-2 pt-2">
                 <p className="font-medium text-slate-800">Learner</p>
                 <p>
                   <span className="text-slate-600">Name:</span>{' '}
@@ -185,6 +187,18 @@ export default function LearnerIdLookupClient() {
                   <span className="text-slate-900">{result.learner.email?.trim() || '—'}</span>
                 </p>
                 <p className="text-xs text-slate-500 font-mono">ID: {result.learner.id}</p>
+                <div className="pt-2">
+                  <p className="font-medium text-slate-700 text-sm">Courses this learner is enrolled in</p>
+                  {result.enrolledCourses.length === 0 ? (
+                    <p className="text-xs text-slate-600 pt-1">No enrollments visible with your access.</p>
+                  ) : (
+                    <ul className="list-disc pl-5 mt-1 space-y-0.5 text-slate-700">
+                      {result.enrolledCourses.map((c) => (
+                        <li key={c.id}>{courseLine(c)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
           </div>

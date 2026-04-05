@@ -52,7 +52,7 @@ export default function BindCardsClient({
   courses: AttendanceCourseOption[]
   /** Instructors and admins may unbind; card coordinators may not. */
   allowUnbind: boolean
-  /** Admins may unbind without matching the bound course in the dropdown. */
+  /** Admins may unbind without the bound learner appearing in the selected course roster. */
   isAdmin: boolean
 }) {
   const readerDomId = useId().replace(/:/g, '')
@@ -429,8 +429,10 @@ export default function BindCardsClient({
       setLookupErr('Preview shows this card is not bound.')
       return
     }
-    if (!isAdmin && previewLookup.courseId !== courseId) {
-      setLookupErr('Select the same course this card is bound to, then unbind.')
+    const learnerInSelectedCourse =
+      !!previewLookup.learnerId && courseLearners.some((l) => l.id === previewLookup.learnerId)
+    if (!isAdmin && !learnerInSelectedCourse) {
+      setLookupErr('Select a course where this learner is enrolled, then unbind.')
       return
     }
     setBusy(true)
@@ -458,6 +460,12 @@ export default function BindCardsClient({
     previewLookup.status === 'bound' &&
     previewLookup.learnerId !== learnerPick?.id
 
+  const boundLearnerInSelectedCourse =
+    previewLookup?.ok === true &&
+    previewLookup.status === 'bound' &&
+    !!previewLookup.learnerId &&
+    courseLearners.some((l) => l.id === previewLookup.learnerId)
+
   const canUnbind =
     allowUnbind &&
     online &&
@@ -465,15 +473,16 @@ export default function BindCardsClient({
     previewLookup.status === 'bound' &&
     !!courseId &&
     OFFLINE_ID_CODE_RE.test(normalizedCode) &&
-    (isAdmin || previewLookup.courseId === courseId)
+    (isAdmin || boundLearnerInSelectedCourse)
 
   const unbindCourseHint =
     allowUnbind &&
     previewLookup?.ok &&
     previewLookup.status === 'bound' &&
     !isAdmin &&
-    previewLookup.courseId != null &&
-    previewLookup.courseId !== courseId
+    !!previewLookup.learnerId &&
+    !!courseId &&
+    !boundLearnerInSelectedCourse
 
   return (
     <div className="space-y-4">
@@ -687,7 +696,8 @@ export default function BindCardsClient({
         )}
         {unbindCourseHint && (
           <p className="text-xs text-amber-800">
-            This card is tied to another course in the list — select that course to unbind, or ask an admin.
+            The bound learner is not in this course roster — select a course where they are enrolled to unbind, or
+            ask an admin.
           </p>
         )}
         {canUnbind && (
