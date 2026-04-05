@@ -11,8 +11,23 @@ import type {
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 200
 
+/** Full present/absent/total per session for modules on the current page (not limited by pagination). */
+export type AttendanceSessionAggregate = {
+  total: number
+  present: number
+  absent: number
+  submittedAt: string | null
+}
+
 type ReportResult =
-  | { rows: AttendanceReportRow[]; totalCount: number; page: number; pageSize: number }
+  | {
+      rows: AttendanceReportRow[]
+      totalCount: number
+      page: number
+      pageSize: number
+      /** Key: `${courseId}:${moduleId}` — counts all roster rows matching filters for that session */
+      sessionAggregates: Record<string, AttendanceSessionAggregate>
+    }
   | { error: string }
 
 function normalizeSessionType(sessionType: AttendanceSessionTypeFilter): 'all' | 'live_session' | 'offline_session' {
@@ -94,7 +109,8 @@ export async function fetchAttendanceReport(input: AttendanceReportFetchInput): 
   }[]
 
   const moduleIds = moduleRows.map((m) => m.id)
-  if (moduleIds.length === 0) return { rows: [], totalCount: 0, page: 1, pageSize }
+  if (moduleIds.length === 0)
+    return { rows: [], totalCount: 0, page: 1, pageSize, sessionAggregates: {} }
 
   const moduleById = new Map(
     moduleRows.map((m) => [
@@ -128,11 +144,12 @@ export async function fetchAttendanceReport(input: AttendanceReportFetchInput): 
       .limit(100)
     if (pErr) return { error: pErr.message }
     learnerIdsFilter = (matches ?? []).map((m) => m.id as string)
-    if (learnerIdsFilter.length === 0) return { rows: [], totalCount: 0, page: 1, pageSize }
+    if (learnerIdsFilter.length === 0)
+      return { rows: [], totalCount: 0, page: 1, pageSize, sessionAggregates: {} }
   }
 
-  function applyRosterFilters(q: any) {
-    let rosterQuery = q.in('module_id', moduleIds)
+  function applyRosterFilters(q: any, moduleIdsList: string[]) {
+    let rosterQuery = q.in('module_id', moduleIdsList)
     if (presence === 'present') rosterQuery = rosterQuery.eq('is_present', true)
     if (presence === 'absent') rosterQuery = rosterQuery.eq('is_present', false)
     if (learnerIdsFilter) rosterQuery = rosterQuery.in('learner_id', learnerIdsFilter)
@@ -146,13 +163,14 @@ export async function fetchAttendanceReport(input: AttendanceReportFetchInput): 
   // Step 3a: exact count only (does not transfer row payloads).
   const countQuery = applyRosterFilters(
     supabase.from('module_session_roster').select('id', { count: 'exact', head: true }),
+    moduleIds,
   )
 
   const { count: totalCountRaw, error: countErr } = await countQuery
   if (countErr) return { error: countErr.message }
 
   const totalCount = totalCountRaw ?? 0
-  if (totalCount === 0) return { rows: [], totalCount: 0, page: 1, pageSize }
+  if (totalCount === 0) return { rows: [], totalCount: 0, page: 1, pageSize, sessionAggregates: {} }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const safePage = Math.min(page, totalPages)
@@ -164,6 +182,7 @@ export async function fetchAttendanceReport(input: AttendanceReportFetchInput): 
     supabase
       .from('module_session_roster')
       .select('id, module_id, learner_id, is_present, roster_submitted_at, updated_at'),
+    moduleIds,
   )
 
   const { data: roster, error: rErr } = await rosterQuery
@@ -181,7 +200,54 @@ export async function fetchAttendanceReport(input: AttendanceReportFetchInput): 
   }[]
 
   if (rosterRows.length === 0)
-    return { rows: [], totalCount, page: safePage, pageSize }
+    return { rows: [], totalCount, page: safePage, pageSize, sessionAggregates: {} }
+
+  // Step 3c: full per-session counts for modules on this page (same filters, no pagination).
+  const pageModuleIdSet = new Set(rosterRows.map((r) => r.module_id))
+  const pageModuleIds = Array.from(pageModuleIdSet)
+  const aggQuery = applyRosterFilters(
+    supabase.from('module_session_roster').select('module_id, is_present, roster_submitted_at'),
+    pageModuleIds,
+  )
+  const { data: aggRows, error: aggErr } = await aggQuery
+  if (aggErr) return { error: aggErr.message }
+
+  const sessionAggregates: Record<string, AttendanceSessionAggregate> = {}
+  const byModule = new Map<
+    string,
+    { total: number; present: number; absent: number; submittedAts: string[] }
+  >()
+  for (const mid of pageModuleIds) {
+    byModule.set(mid, { total: 0, present: 0, absent: 0, submittedAts: [] })
+  }
+  for (const raw of aggRows ?? []) {
+    const row = raw as {
+      module_id: string
+      is_present: boolean
+      roster_submitted_at: string | null
+    }
+    const acc = byModule.get(row.module_id)
+    if (!acc) continue
+    acc.total += 1
+    if (row.is_present) acc.present += 1
+    else acc.absent += 1
+    if (row.roster_submitted_at) acc.submittedAts.push(row.roster_submitted_at)
+  }
+  for (const [mid, acc] of byModule) {
+    const mod = moduleById.get(mid)
+    if (!mod) continue
+    const key = `${mod.courseId}:${mid}`
+    let submittedAt: string | null = null
+    for (const s of acc.submittedAts) {
+      if (!submittedAt || new Date(s) > new Date(submittedAt)) submittedAt = s
+    }
+    sessionAggregates[key] = {
+      total: acc.total,
+      present: acc.present,
+      absent: acc.absent,
+      submittedAt,
+    }
+  }
 
   // Step 4: fetch learner names for the filtered roster.
   const learnerIds = Array.from(new Set(rosterRows.map((r) => r.learner_id)))
@@ -216,7 +282,7 @@ export async function fetchAttendanceReport(input: AttendanceReportFetchInput): 
     })
     .filter(Boolean) as AttendanceReportRow[]
 
-  return { rows, totalCount, page: safePage, pageSize }
+  return { rows, totalCount, page: safePage, pageSize, sessionAggregates }
 }
 
 type ModuleDetailResult = { rows: AttendanceReportRow[] } | { error: string }

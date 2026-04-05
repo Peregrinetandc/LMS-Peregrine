@@ -15,6 +15,7 @@ import {
   Menu,
   PlusCircle,
   QrCode,
+  ScanLine,
   ScanSearch,
   UserCheck,
   UserPlus,
@@ -35,6 +36,7 @@ export type NavItem = {
     | 'attendance'
     | 'attendanceReport'
     | 'bindIdCards'
+    | 'idCardScanAttendance'
     | 'learnerIdLookup'
     | 'internship'
     | 'createCourse'
@@ -94,6 +96,8 @@ export default function DashboardNavDrawer({
         return <BarChart3 className="h-4 w-4" />
       case 'bindIdCards':
         return <QrCode className="h-4 w-4" />
+      case 'idCardScanAttendance':
+        return <ScanLine className="h-4 w-4" />
       case 'learnerIdLookup':
         return <ScanSearch className="h-4 w-4" />
       case 'internship':

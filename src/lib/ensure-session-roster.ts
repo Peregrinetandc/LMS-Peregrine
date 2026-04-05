@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/** Create default present rows for all enrolled learners (idempotent). */
+/** Create roster rows for all enrolled learners (default absent; manual UI defaults Present until submit). */
 export async function ensureSessionRosterRows(
   supabase: SupabaseClient,
   moduleId: string,
@@ -24,7 +24,7 @@ export async function ensureSessionRosterRows(
     .map((e) => ({
       module_id: moduleId,
       learner_id: e.learner_id as string,
-      is_present: true,
+      is_present: false,
     }))
 
   if (toAdd.length === 0) return {}

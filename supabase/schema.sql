@@ -1,7 +1,7 @@
 -- ============================================================
 -- Peregrine T&C – Full database schema (baseline + migrations)
 -- Source of truth: mirrors supabase/migrations/*.sql through
--- 20260404120000_card_coordinator_role.sql
+-- 20260404120000_card_coordinator_role.sql, 20260405120000_id_card_scan_attendance_rls.sql
 -- Use: Supabase SQL Editor for a greenfield project, or compare
 -- against `supabase db dump` / migration history.
 -- Then run supabase/seed.sql (see that file for production vs demo usage).
@@ -332,7 +332,7 @@ create table public.module_session_roster (
   id                    uuid primary key default gen_random_uuid(),
   module_id             uuid not null references public.modules(id) on delete cascade,
   learner_id            uuid not null references public.profiles(id) on delete cascade,
-  is_present            boolean not null default true,
+  is_present            boolean not null default false,
   roster_submitted_at   timestamptz,
   updated_at            timestamptz not null default now(),
   last_marked_by        uuid references public.profiles(id) on delete set null,
@@ -481,6 +481,11 @@ alter table public.certificates enable row level security;
 create policy "Users view modules" on public.modules for select to authenticated
 using (exists (select 1 from public.courses where courses.id = modules.course_id and (courses.status = 'published' or courses.instructor_id = auth.uid())));
 
+create policy "Admins and card coordinators view all modules" on public.modules
+  for select
+  to authenticated
+  using (public.is_admin() or public.is_card_coordinator());
+
 create policy "Users view sections" on public.sections for select to authenticated
 using (exists (select 1 from public.courses where courses.id = sections.course_id and (courses.status = 'published' or courses.instructor_id = auth.uid())));
 
@@ -566,6 +571,28 @@ create policy "Instructors delete assignments for their modules" on public.assig
       where m.id = assignments.module_id and c.instructor_id = auth.uid()
     )
   );
+
+-- Admins can manage course content for any course (aligns with "Admins update any course" on public.courses)
+create policy "Admins manage all sections"
+  on public.sections
+  for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "Admins manage all modules"
+  on public.modules
+  for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "Admins manage all assignments"
+  on public.assignments
+  for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- module_external_links
 create policy "View external links with modules"
@@ -1036,6 +1063,12 @@ create policy "Staff manage session roster" on public.module_session_roster
         and c.instructor_id = auth.uid()
     )
   );
+
+create policy "Card coordinators manage session roster" on public.module_session_roster
+  for all
+  to authenticated
+  using (public.is_card_coordinator())
+  with check (public.is_card_coordinator());
 
 -- Offline physical ID cards (QR pool + bind); see migration 20260402100000
 create or replace function public._offline_random_segment(p_len int)

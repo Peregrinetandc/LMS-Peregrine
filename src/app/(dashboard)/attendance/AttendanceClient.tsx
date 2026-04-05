@@ -166,6 +166,7 @@ export default function AttendanceClient({
 
           {rosterRows !== null && !loadErr && (
             <SessionAttendanceClient
+              key={selected.moduleId}
               moduleId={selected.moduleId}
               courseId={selected.courseId}
               currentUserId={currentUserId}

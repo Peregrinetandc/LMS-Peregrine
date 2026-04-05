@@ -1,7 +1,11 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { fetchAttendanceModuleDetail, fetchAttendanceReport } from './actions'
+import {
+  fetchAttendanceModuleDetail,
+  fetchAttendanceReport,
+  type AttendanceSessionAggregate,
+} from './actions'
 import type {
   AttendancePresenceFilter,
   AttendanceReportCourseOption,
@@ -31,13 +35,6 @@ function formatType(t: string) {
   return t.replace('_', ' ')
 }
 
-function safeDate(s: string | null) {
-  if (!s) return null
-  const d = new Date(s)
-  if (Number.isNaN(d.getTime())) return null
-  return d
-}
-
 export default function AttendanceReportClient({
   courses,
 }: {
@@ -59,6 +56,7 @@ export default function AttendanceReportClient({
   const [pageSize, setPageSize] = useState(100)
   const [totalCount, setTotalCount] = useState(0)
   const [serverPage, setServerPage] = useState(1)
+  const [sessionAggregates, setSessionAggregates] = useState<Record<string, AttendanceSessionAggregate>>({})
 
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null)
   const [moduleDetailRows, setModuleDetailRows] = useState<AttendanceReportRow[]>([])
@@ -115,6 +113,7 @@ export default function AttendanceReportClient({
         setRows([])
         setTotalCount(0)
         setServerPage(1)
+        setSessionAggregates({})
         resetDetailPanel()
         return
       }
@@ -122,6 +121,7 @@ export default function AttendanceReportClient({
       setTotalCount(res.totalCount)
       setServerPage(res.page)
       setPageSize(res.pageSize)
+      setSessionAggregates(res.sessionAggregates ?? {})
       resetDetailPanel()
     })
   }
@@ -133,49 +133,39 @@ export default function AttendanceReportClient({
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
   const moduleSummaries = useMemo(() => {
-    const map = new Map<string, ModuleSummary>()
+    const seen = new Set<string>()
+    const list: ModuleSummary[] = []
 
     for (const r of rows) {
       const key = `${r.courseId}:${r.moduleId}`
-      const curr =
-        map.get(key) ??
-        ({
-          key,
-          courseTitle: r.courseTitle,
-          courseCode: r.courseCode,
-          courseId: r.courseId,
-          moduleId: r.moduleId,
-          moduleTitle: r.moduleTitle,
-          moduleType: r.moduleType,
-          weekIndex: r.weekIndex,
-          submittedAt: null,
-          total: 0,
-          present: 0,
-          absent: 0,
-        } satisfies ModuleSummary)
+      if (seen.has(key)) continue
+      seen.add(key)
 
-      curr.total += 1
-      if (r.isPresent) curr.present += 1
-      else curr.absent += 1
-
-      // When submitted, all rows share the same timestamp. Use the latest non-null value.
-      if (r.rosterSubmittedAt) {
-        const existing = safeDate(curr.submittedAt)
-        const next = safeDate(r.rosterSubmittedAt)
-        if (!existing || (next && next > existing)) curr.submittedAt = r.rosterSubmittedAt
-      }
-
-      map.set(key, curr)
+      const agg = sessionAggregates[key]
+      list.push({
+        key,
+        courseTitle: r.courseTitle,
+        courseCode: r.courseCode,
+        courseId: r.courseId,
+        moduleId: r.moduleId,
+        moduleTitle: r.moduleTitle,
+        moduleType: r.moduleType,
+        weekIndex: r.weekIndex,
+        submittedAt: agg?.submittedAt ?? null,
+        total: agg?.total ?? 0,
+        present: agg?.present ?? 0,
+        absent: agg?.absent ?? 0,
+      })
     }
 
-    return Array.from(map.values()).sort((a, b) => {
+    return list.sort((a, b) => {
       return (
         a.courseTitle.localeCompare(b.courseTitle) ||
         a.weekIndex - b.weekIndex ||
         a.moduleTitle.localeCompare(b.moduleTitle)
       )
     })
-  }, [rows])
+  }, [rows, sessionAggregates])
 
   const detailStats = useMemo(() => {
     const total = moduleDetailRows.length
@@ -320,8 +310,9 @@ export default function AttendanceReportClient({
         )}
 
         <p className="mt-3 text-xs text-slate-500">
-          Data loads in pages (max 200 rows per request). Date filters use attendance submission time. Session
-          summaries below only include roster rows on the current page—narrow filters or change page for more.
+          Data loads in pages (max 200 rows per request). Date filters use attendance submission time. Session rows
+          list modules that appear on this page; Present / Absent / Total are full counts for each session (all
+          matching learners), not just the current page.
         </p>
 
         {totalCount > 0 && (
@@ -356,7 +347,7 @@ export default function AttendanceReportClient({
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Sessions (this page)</h2>
+          <h2 className="text-base font-semibold text-slate-900">Sessions on this page</h2>
           <p className="text-sm text-slate-600">
             {moduleSummaries.length} session{moduleSummaries.length === 1 ? '' : 's'}
           </p>

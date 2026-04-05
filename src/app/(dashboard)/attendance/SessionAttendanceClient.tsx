@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 
@@ -11,6 +11,14 @@ export type RosterRow = {
   is_present: boolean
   roster_submitted_at: string | null
   updated_at: string | null
+}
+
+function normalizeRowsForEditing(rows: RosterRow[]): RosterRow[] {
+  const submittedOnce = rows.some((r) => r.roster_submitted_at != null)
+  if (submittedOnce) {
+    return rows.map((r) => ({ ...r }))
+  }
+  return rows.map((r) => ({ ...r, is_present: true }))
 }
 
 export default function SessionAttendanceClient({
@@ -29,28 +37,18 @@ export default function SessionAttendanceClient({
   variant?: 'hub' | 'module'
   onAfterSubmit?: () => void
 }) {
-  const [rows, setRows] = useState(initialRows)
+  const [rows, setRows] = useState<RosterRow[]>(() => normalizeRowsForEditing(initialRows))
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
+  useEffect(() => {
+    setRows(normalizeRowsForEditing(initialRows))
+  }, [moduleId, initialRows])
+
   const submittedOnce = rows.some((r) => r.roster_submitted_at != null)
 
-  async function togglePresent(rowId: string, next: boolean) {
+  function togglePresent(rowId: string, next: boolean) {
     setMsg(null)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('module_session_roster')
-      .update({
-        is_present: next,
-        last_marked_by: currentUserId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rowId)
-
-    if (error) {
-      setMsg({ type: 'err', text: error.message })
-      return
-    }
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, is_present: next } : r)))
   }
 
@@ -59,16 +57,25 @@ export default function SessionAttendanceClient({
     setMsg(null)
     const supabase = createClient()
     const ts = new Date().toISOString()
-    const { error } = await supabase
-      .from('module_session_roster')
-      .update({ roster_submitted_at: ts, updated_at: ts })
-      .eq('module_id', moduleId)
 
-    if (error) {
-      setMsg({ type: 'err', text: error.message })
-      setBusy(false)
-      return
+    for (const r of rows) {
+      const { error } = await supabase
+        .from('module_session_roster')
+        .update({
+          is_present: r.is_present,
+          last_marked_by: currentUserId,
+          updated_at: ts,
+          roster_submitted_at: ts,
+        })
+        .eq('id', r.id)
+
+      if (error) {
+        setMsg({ type: 'err', text: error.message })
+        setBusy(false)
+        return
+      }
     }
+
     setRows((prev) => prev.map((r) => ({ ...r, roster_submitted_at: ts })))
     setMsg({ type: 'ok', text: 'Attendance submitted.' })
     setBusy(false)
@@ -89,6 +96,12 @@ export default function SessionAttendanceClient({
         </div>
       )}
 
+      {!submittedOnce && rows.length > 0 && (
+        <p className="text-sm text-slate-600 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          Everyone starts as <strong className="text-slate-800">Present</strong> for quick editing. Uncheck absences,
+          then click <strong className="text-slate-800">Submit attendance</strong> to save.
+        </p>
+      )}
 
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
         <table className="w-full text-sm">
@@ -122,7 +135,7 @@ export default function SessionAttendanceClient({
                       <input
                         type="checkbox"
                         checked={r.is_present}
-                        onChange={(e) => void togglePresent(r.id, e.target.checked)}
+                        onChange={(e) => togglePresent(r.id, e.target.checked)}
                         className="rounded border-slate-300"
                       />
                       <span className="text-slate-600">Present</span>

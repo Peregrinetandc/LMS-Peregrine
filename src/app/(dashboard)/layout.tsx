@@ -34,7 +34,14 @@ export default async function DashboardLayout({
   const navSections: NavLinkSections = isCardCoordinator
     ? [
         [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }],
-        [{ href: '/attendance/bind-cards', label: 'Bind ID Cards', icon: 'bindIdCards' }],
+        [
+          { href: '/attendance/bind-cards', label: 'Bind ID Cards', icon: 'bindIdCards' },
+          {
+            href: '/attendance/id-card-scan',
+            label: 'Scan ID attendance',
+            icon: 'idCardScanAttendance',
+          },
+        ],
         [{ href: PEREGRINE_AI_HREF, label: 'Peregrine AI', icon: 'aiExternal', external: true }],
       ]
     : [
@@ -42,8 +49,12 @@ export default async function DashboardLayout({
           { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
           { href: '/courses', label: isInstructor ? 'All Courses' : 'My Courses', icon: 'courses' },
           ...(isInstructor ? [{ href: '/grading', label: 'Grading', icon: 'grading' as const }] : []),
+        ],
+        [
           ...(isInstructor ? [{ href: '/attendance', label: 'Attendance', icon: 'attendance' as const }] : []),
           ...(isInstructor ? [{ href: '/attendance-report', label: 'Attendance Report', icon: 'attendanceReport' as const }] : []),
+          ...(isInstructor ? [{href: '/attendance/id-card-scan',label: 'Scan ID attendance',icon: 'idCardScanAttendance' as const,},]: []),
+
         ],
         [
           ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),

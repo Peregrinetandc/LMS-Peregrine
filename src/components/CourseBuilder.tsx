@@ -354,7 +354,10 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  /** Validation only (title / course code); shown above the form */
   const [error, setError] = useState('')
+  /** Generic save/publish/delete failure; details go to console */
+  const [actionError, setActionError] = useState('')
   const [loading, setLoading] = useState(!!courseId)
   const [loadError, setLoadError] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -745,191 +748,206 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     }
   }
 
+  const logSaveFailure = (label: string, err: unknown) => {
+    console.error(`[CourseBuilder] ${label}`, err)
+  }
+
   const handleSave = async (publish: boolean) => {
     if (!title.trim()) { setError('Course title is required.'); return }
     if (!courseCode.trim()) { setError('Course code is required.'); return }
     setSaving(true)
     setError('')
+    setActionError('')
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not authenticated.'); setSaving(false); return }
+    if (!user) {
+      logSaveFailure('save: not authenticated', new Error('No session'))
+      setActionError('Something went wrong.')
+      setSaving(false)
+      return
+    }
 
-    const startsAtIso = fromDatetimeLocal(courseStartsAt)
+    try {
+      const startsAtIso = fromDatetimeLocal(courseStartsAt)
 
-    if (courseId) {
-      const updatePayload: Record<string, unknown> = {
-        title: title.trim(),
-        course_code: courseCode.trim(),
-        description: description.trim() || null,
-        thumbnail_url: thumbnailUrl.trim() || null,
-        starts_at: startsAtIso,
-        status: publish ? 'published' : 'draft',
-        enrollment_type: enrollmentType,
-      }
-      if (isAdmin && selectedInstructorId) {
-        updatePayload.instructor_id = selectedInstructorId
-      }
+      if (courseId) {
+        const updatePayload: Record<string, unknown> = {
+          title: title.trim(),
+          course_code: courseCode.trim(),
+          description: description.trim() || null,
+          thumbnail_url: thumbnailUrl.trim() || null,
+          starts_at: startsAtIso,
+          status: publish ? 'published' : 'draft',
+          enrollment_type: enrollmentType,
+        }
+        if (isAdmin && selectedInstructorId) {
+          updatePayload.instructor_id = selectedInstructorId
+        }
 
-      const { error: upErr } = await supabase.from('courses').update(updatePayload).eq('id', courseId)
+        const { error: upErr } = await supabase.from('courses').update(updatePayload).eq('id', courseId)
 
-      if (upErr) {
-        setError(upErr.message)
-        setSaving(false)
+        if (upErr) {
+          logSaveFailure('course update', upErr)
+          setActionError('Something went wrong.')
+          return
+        }
+
+        const { data: existingMods } = await supabase
+          .from('modules')
+          .select('id')
+          .eq('course_id', courseId)
+
+        const keepIds = new Set(
+          modules.map((m) => m.dbId).filter(Boolean) as string[]
+        )
+        const toRemove = (existingMods ?? [])
+          .map((r) => r.id)
+          .filter((id) => !keepIds.has(id))
+        if (toRemove.length > 0) {
+          await supabase.from('modules').delete().in('id', toRemove)
+        }
+
+        let { data: sectionRow } = await supabase
+          .from('sections')
+          .select('id')
+          .eq('course_id', courseId)
+          .order('sort_order', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+        if (!sectionRow) {
+          const { data: newSec } = await supabase
+            .from('sections')
+            .insert({ course_id: courseId, title: 'Course Content', sort_order: 0 })
+            .select('id')
+            .single()
+          sectionRow = newSec
+        }
+
+        const sectionId = sectionRow?.id ?? null
+
+        for (let i = 0; i < modules.length; i++) {
+          const mod = modules[i]
+          const row = buildModuleRow(mod, courseId, sectionId, i, courseStartsAt)
+
+          if (mod.dbId) {
+            const { error: mErr } = await supabase
+              .from('modules')
+              .update(row)
+              .eq('id', mod.dbId)
+            if (mErr) {
+              logSaveFailure('module update', mErr)
+              setActionError('Something went wrong.')
+              return
+            }
+            await syncAssignmentForModule(supabase, mod, mod.dbId)
+            await syncQuizAndExternalForModule(
+              supabase,
+              mod.dbId,
+              mod.type,
+              mod.external_links.map(({ label, url }) => ({ label, url })),
+              mod.quiz_questions.map((q) => ({
+                prompt: q.prompt,
+                options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
+              })),
+            )
+          } else {
+            const { data: dbMod, error: insErr } = await supabase
+              .from('modules')
+              .insert(row)
+              .select('id')
+              .single()
+            if (insErr || !dbMod) {
+              logSaveFailure('module insert', insErr ?? new Error('no row'))
+              setActionError('Something went wrong.')
+              return
+            }
+            await syncAssignmentForModule(supabase, mod, dbMod.id)
+            await syncQuizAndExternalForModule(
+              supabase,
+              dbMod.id,
+              mod.type,
+              mod.external_links.map(({ label, url }) => ({ label, url })),
+              mod.quiz_questions.map((q) => ({
+                prompt: q.prompt,
+                options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
+              })),
+            )
+          }
+        }
+
+        setBaselineSnapshot(snapshot)
+        setSaved(true)
+        setTimeout(() => router.push(`/courses/${courseId}`), 800)
         return
       }
 
-      const { data: existingMods } = await supabase
-        .from('modules')
-        .select('id')
-        .eq('course_id', courseId)
+      const ownerId = isAdmin && selectedInstructorId ? selectedInstructorId : user.id
 
-      const keepIds = new Set(
-        modules.map((m) => m.dbId).filter(Boolean) as string[]
-      )
-      const toRemove = (existingMods ?? [])
-        .map((r) => r.id)
-        .filter((id) => !keepIds.has(id))
-      if (toRemove.length > 0) {
-        await supabase.from('modules').delete().in('id', toRemove)
-      }
-
-      let { data: sectionRow } = await supabase
-        .from('sections')
-        .select('id')
-        .eq('course_id', courseId)
-        .order('sort_order', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-
-      if (!sectionRow) {
-        const { data: newSec } = await supabase
-          .from('sections')
-          .insert({ course_id: courseId, title: 'Course Content', sort_order: 0 })
-          .select('id')
-          .single()
-        sectionRow = newSec
-      }
-
-      const sectionId = sectionRow?.id ?? null
-
-      for (let i = 0; i < modules.length; i++) {
-        const mod = modules[i]
-        const row = buildModuleRow(mod, courseId, sectionId, i, courseStartsAt)
-
-        if (mod.dbId) {
-          const { error: mErr } = await supabase
-            .from('modules')
-            .update(row)
-            .eq('id', mod.dbId)
-          if (mErr) {
-            setError(mErr.message)
-            setSaving(false)
-            return
-          }
-          await syncAssignmentForModule(supabase, mod, mod.dbId)
-          await syncQuizAndExternalForModule(
-            supabase,
-            mod.dbId,
-            mod.type,
-            mod.external_links.map(({ label, url }) => ({ label, url })),
-            mod.quiz_questions.map((q) => ({
-              prompt: q.prompt,
-              options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
-            })),
-          )
-        } else {
-          const { data: dbMod, error: insErr } = await supabase
-            .from('modules')
-            .insert(row)
-            .select('id')
-            .single()
-          if (insErr || !dbMod) {
-            setError(insErr?.message ?? 'Failed to add lesson.')
-            setSaving(false)
-            return
-          }
-          await syncAssignmentForModule(supabase, mod, dbMod.id)
-          await syncQuizAndExternalForModule(
-            supabase,
-            dbMod.id,
-            mod.type,
-            mod.external_links.map(({ label, url }) => ({ label, url })),
-            mod.quiz_questions.map((q) => ({
-              prompt: q.prompt,
-              options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
-            })),
-          )
-        }
-      }
-
-      setSaving(false)
-      setBaselineSnapshot(snapshot)
-      setSaved(true)
-      setTimeout(() => router.push(`/courses/${courseId}`), 800)
-      return
-    }
-
-    const ownerId = isAdmin && selectedInstructorId ? selectedInstructorId : user.id
-
-    const { data: course, error: courseErr } = await supabase
-      .from('courses')
-      .insert({
-        instructor_id: ownerId,
-        course_code: courseCode.trim(),
-        title: title.trim(),
-        description: description.trim() || null,
-        thumbnail_url: thumbnailUrl.trim() || null,
-        starts_at: startsAtIso,
-        status: publish ? 'published' : 'draft',
-        enrollment_type: enrollmentType,
-      })
-      .select('id')
-      .single()
-
-    if (courseErr || !course) {
-      setError(courseErr?.message ?? 'Failed to create course.')
-      setSaving(false)
-      return
-    }
-
-    const { data: section } = await supabase
-      .from('sections')
-      .insert({ course_id: course.id, title: 'Course Content', sort_order: 0 })
-      .select('id')
-      .single()
-
-    for (let i = 0; i < modules.length; i++) {
-      const mod = modules[i]
-      const row = buildModuleRow(mod, course.id, section?.id ?? null, i, courseStartsAt)
-      const { data: dbMod, error: mErr } = await supabase
-        .from('modules')
-        .insert(row)
+      const { data: course, error: courseErr } = await supabase
+        .from('courses')
+        .insert({
+          instructor_id: ownerId,
+          course_code: courseCode.trim(),
+          title: title.trim(),
+          description: description.trim() || null,
+          thumbnail_url: thumbnailUrl.trim() || null,
+          starts_at: startsAtIso,
+          status: publish ? 'published' : 'draft',
+          enrollment_type: enrollmentType,
+        })
         .select('id')
         .single()
 
-      if (mErr || !dbMod) {
-        setError(mErr?.message ?? 'Failed to create lesson.')
-        setSaving(false)
+      if (courseErr || !course) {
+        logSaveFailure('course insert', courseErr ?? new Error('no row'))
+        setActionError('Something went wrong.')
         return
       }
-      await syncAssignmentForModule(supabase, mod, dbMod.id)
-      await syncQuizAndExternalForModule(
-        supabase,
-        dbMod.id,
-        mod.type,
-        mod.external_links.map(({ label, url }) => ({ label, url })),
-        mod.quiz_questions.map((q) => ({
-          prompt: q.prompt,
-          options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
-        })),
-      )
-    }
 
-    setSaving(false)
-    setBaselineSnapshot(snapshot)
-    setSaved(true)
-    setTimeout(() => router.push(`/courses/${course.id}`), 1200)
+      const { data: section } = await supabase
+        .from('sections')
+        .insert({ course_id: course.id, title: 'Course Content', sort_order: 0 })
+        .select('id')
+        .single()
+
+      for (let i = 0; i < modules.length; i++) {
+        const mod = modules[i]
+        const row = buildModuleRow(mod, course.id, section?.id ?? null, i, courseStartsAt)
+        const { data: dbMod, error: mErr } = await supabase
+          .from('modules')
+          .insert(row)
+          .select('id')
+          .single()
+
+        if (mErr || !dbMod) {
+          logSaveFailure('module insert (new course)', mErr ?? new Error('no row'))
+          setActionError('Something went wrong.')
+          return
+        }
+        await syncAssignmentForModule(supabase, mod, dbMod.id)
+        await syncQuizAndExternalForModule(
+          supabase,
+          dbMod.id,
+          mod.type,
+          mod.external_links.map(({ label, url }) => ({ label, url })),
+          mod.quiz_questions.map((q) => ({
+            prompt: q.prompt,
+            options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
+          })),
+        )
+      }
+
+      setBaselineSnapshot(snapshot)
+      setSaved(true)
+      setTimeout(() => router.push(`/courses/${course.id}`), 1200)
+    } catch (e: unknown) {
+      logSaveFailure('save (exception)', e)
+      setActionError('Something went wrong.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDeleteCourse = async () => {
@@ -937,11 +955,13 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     if (!confirm('Delete this course and all related lessons and data? This cannot be undone.')) return
     setDeleting(true)
     setError('')
+    setActionError('')
     const supabase = createClient()
     const { error: dErr } = await supabase.from('courses').delete().eq('id', courseId)
     setDeleting(false)
     if (dErr) {
-      setError(dErr.message)
+      console.error('[CourseBuilder] delete course', dErr)
+      setActionError('Something went wrong.')
       return
     }
     router.push('/dashboard')
@@ -973,7 +993,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         </div>
       )}
 
-      {/* Course Details */}
+      {/* Course Details — save/publish errors use actionError near the action buttons */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
           <h2 className="text-lg font-semibold text-slate-900">
@@ -1673,13 +1693,18 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {hasUnsavedChanges && !saved && (
             <span className="text-sm font-medium text-amber-700">Unsaved changes</span>
           )}
           {saved && (
             <span className="flex items-center gap-1.5 text-green-600 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4" /> Saved! Redirecting…
+            </span>
+          )}
+          {actionError && (
+            <span className="text-sm font-medium text-red-600" role="alert">
+              Something went wrong.
             </span>
           )}
           <button
