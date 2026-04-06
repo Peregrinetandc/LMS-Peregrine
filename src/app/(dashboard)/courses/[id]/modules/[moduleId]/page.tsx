@@ -257,7 +257,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               {mod.description}
             </div>
           )}
-          <VideoModule moduleId={mod.id} contentUrl={mod.content_url}/>
+          <VideoModule key={mod.id} moduleId={mod.id} contentUrl={mod.content_url}/>
         </div>
       )}
 

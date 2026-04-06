@@ -1,28 +1,12 @@
 'use client'
 
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './VideoModule.plyr.css'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
-/** Fire completion when this many seconds remain (typical LMS “almost finished”). */
 const END_SECONDS_THRESHOLD = 10
-
-/** Black overlay fade-out (must match CSS `--veil-fade-duration` fallback). */
 const VEIL_FADE_OUT_MS = 480
-
-const FULL_VEIL_CLASS = 'video-module-full-veil'
-
-function ensureFullVeil(wrapper: HTMLElement | null): HTMLDivElement | null {
-  if (!wrapper) return null
-  let veil = wrapper.querySelector<HTMLDivElement>(`.${FULL_VEIL_CLASS}`)
-  if (!veil) {
-    veil = document.createElement('div')
-    veil.className = FULL_VEIL_CLASS
-    wrapper.appendChild(veil)
-  }
-  return veil
-}
 
 interface VideoModuleProps {
   moduleId: string
@@ -82,6 +66,41 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
 
   const doneRef = useRef(false)
 
+  // Veil state managed in React so unmount cleans it up automatically.
+  const [embedReady, setEmbedReady] = useState(false)
+  const [paused, setPaused] = useState(true)
+  const [ended, setEnded] = useState(false)
+  const [waiting, setWaiting] = useState(false)
+  const [hiding, setHiding] = useState(false)
+  const hidingTimerRef = useRef<number | undefined>(undefined)
+
+  const blackOverlay = embedReady && !ended && (paused || waiting)
+  const showVeil = !embedReady || blackOverlay
+
+  const prevShowVeilRef = useRef(showVeil)
+  const prevBlackRef = useRef(blackOverlay)
+
+  // Trigger fade-out when black overlay disappears (resume / buffering ends).
+  useEffect(() => {
+    const wasVisible = prevShowVeilRef.current
+    const wasBlack = prevBlackRef.current
+    prevShowVeilRef.current = showVeil
+    prevBlackRef.current = blackOverlay
+
+    if (wasVisible && wasBlack && !blackOverlay && !showVeil) {
+      setHiding(true)
+      window.clearTimeout(hidingTimerRef.current)
+      hidingTimerRef.current = window.setTimeout(() => {
+        setHiding(false)
+      }, VEIL_FADE_OUT_MS)
+    } else if (showVeil) {
+      window.clearTimeout(hidingTimerRef.current)
+      setHiding(false)
+    }
+
+    return () => window.clearTimeout(hidingTimerRef.current)
+  }, [showVeil, blackOverlay])
+
   const onReachEnd = useCallback(() => {
     const run = async () => {
       await markVideoCompleteOnce(moduleId, doneRef)
@@ -90,29 +109,30 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
     void run()
   }, [moduleId, router])
 
-  // YouTube / Vimeo: load Plyr only in the browser — the package touches `document` at import time (SSR-safe).
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!provider || !embedId || !embedRef.current) return
 
     const el = embedRef.current
     let cancelled = false
     let pollId: number | undefined
-    let lateTimer: number | undefined
-    let lateTimer2: number | undefined
     let mo: MutationObserver | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Plyr is loaded dynamically
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let player: any = null
-    let onTimeUpdate: (() => void) | undefined
-    let onEndedHandler: (() => void) | undefined
-    let onStateForEmbed: (() => void) | undefined
-    let markEmbedPaintReady: (() => void) | undefined
-    let onWaiting: (() => void) | undefined
-    let onBufferingDone: (() => void) | undefined
-    let onPlayingForVeil: (() => void) | undefined
-    /** True while embed is stalled waiting for data. */
-    let isWaiting = false
-    let veilFadeEndTimer: number | undefined
-    let veilFadeInProgress = false
+
+    const syncState = () => {
+      if (cancelled || !player?.elements) return
+      setPaused(Boolean(player.paused))
+      setEnded(Boolean(player.ended))
+    }
+
+    const lockIframe = () => {
+      if (cancelled || !player?.elements) return
+      const c = player.elements?.container as HTMLElement | null
+      const iframe = c?.querySelector('iframe') ?? player.elements?.wrapper?.querySelector('iframe')
+      if (iframe) {
+        iframe.style.setProperty('pointer-events', 'none', 'important')
+      }
+    }
 
     void (async () => {
       await import('plyr/dist/plyr.css')
@@ -121,6 +141,11 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
 
       player = new Plyr(el, {
         ratio: '16:9',
+        fullscreen: {
+          enabled: true,
+          fallback: true,
+          container: '.video-module-plyr-host',
+        },
         youtube: {
           rel: 0,
           modestbranding: 1,
@@ -137,198 +162,70 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
         },
       })
       if (cancelled) {
-        try {
-          player.destroy()
-        } catch {
-          /* noop */
-        }
+        try { player.destroy() } catch { /* noop */ }
         return
       }
 
-      onTimeUpdate = () => {
+      player.on('playing', () => {
+        if (cancelled) return
+        const c = player.elements?.container as HTMLElement | null
+        c?.classList.add('video-module-embed-ready')
+        setEmbedReady(true)
+        setWaiting(false)
+        syncState()
+      })
+      player.on('pause', () => { if (!cancelled) syncState() })
+      player.on('ended', () => {
+        if (cancelled) return
+        setWaiting(false)
+        setEnded(true)
+        onReachEnd()
+      })
+      player.on('seeked', () => { if (!cancelled) syncState() })
+      player.on('waiting', () => { if (!cancelled) setWaiting(true) })
+      player.on('stalled', () => { if (!cancelled) setWaiting(true) })
+      player.on('canplay', () => { if (!cancelled) setWaiting(false) })
+      player.on('canplaythrough', () => { if (!cancelled) setWaiting(false) })
+      player.on('error', () => {
+        if (cancelled) return
+        const c = player.elements?.container as HTMLElement | null
+        c?.classList.add('video-module-embed-ready')
+        setEmbedReady(true)
+      })
+
+      player.on('timeupdate', () => {
+        if (cancelled) return
         const d = player.duration
         const t = player.currentTime
         if (Number.isFinite(d) && d > 0 && d - t <= END_SECONDS_THRESHOLD) {
           onReachEnd()
         }
+      })
+
+      lockIframe()
+      pollId = window.setInterval(lockIframe, 200)
+
+      const containerEl = player.elements?.container as HTMLElement | null
+      if (containerEl) {
+        mo = new MutationObserver(() => { if (!cancelled) lockIframe() })
+        mo.observe(containerEl, { childList: true, subtree: true })
       }
-
-      const container = player.elements.container
-
-      markEmbedPaintReady = () => {
-        container.classList.add('video-module-embed-ready')
-      }
-      player.once('playing', markEmbedPaintReady)
-      player.once('error', markEmbedPaintReady)
-
-      const findEmbedIframe = (): HTMLIFrameElement | null =>
-        container.querySelector('iframe') ??
-        player.elements.wrapper?.querySelector('iframe') ??
-        null
-
-      const clearVeilFadeTimer = () => {
-        if (veilFadeEndTimer !== undefined) {
-          window.clearTimeout(veilFadeEndTimer)
-          veilFadeEndTimer = undefined
-        }
-      }
-
-      const finishVeilFade = (veil: HTMLDivElement) => {
-        clearVeilFadeTimer()
-        veilFadeInProgress = false
-        veil.classList.remove(
-          'video-module-full-veil--visible',
-          'video-module-full-veil--hiding',
-          'video-module-full-veil--buffering',
-        )
-      }
-
-      const applyEmbedChromeLock = () => {
-        const iframe = findEmbedIframe()
-        if (iframe) {
-          iframe.style.setProperty('pointer-events', 'none', 'important')
-        }
-
-        const wrapper = player.elements?.wrapper as HTMLElement | undefined
-        const embedReady = container.classList.contains('video-module-embed-ready')
-
-        const paused = Boolean(player.paused)
-        const ended = Boolean(player.ended)
-
-        // Pre-play: gradient veil. After ready: black while paused or buffering (not ended).
-        const blackOverlay = embedReady && !ended && (paused || isWaiting)
-        const showFullVeil = !embedReady || blackOverlay
-
-        const veil = ensureFullVeil(wrapper ?? null)
-        if (!veil) return
-
-        if (veilFadeInProgress) {
-          // User paused again or show veil — cancel fade
-          if (showFullVeil) {
-            clearVeilFadeTimer()
-            veilFadeInProgress = false
-            veil.classList.remove('video-module-full-veil--hiding')
-            veil.classList.toggle('video-module-full-veil--visible', true)
-            veil.classList.toggle('video-module-full-veil--buffering', blackOverlay)
-          }
-          return
-        }
-
-        const hadBlack = veil.classList.contains('video-module-full-veil--buffering')
-        const hadVisible = veil.classList.contains('video-module-full-veil--visible')
-
-        // Fade out only when leaving the black overlay (resume or buffering ended). Pre-play → playing: instant.
-        const fadeOutBlack =
-          hadVisible &&
-          hadBlack &&
-          !blackOverlay &&
-          !showFullVeil
-
-        if (fadeOutBlack) {
-          veilFadeInProgress = true
-          veil.classList.add('video-module-full-veil--hiding')
-          const onFadeDone = () => {
-            if (cancelled || !veilFadeInProgress) return
-            clearVeilFadeTimer()
-            finishVeilFade(veil)
-          }
-          const onOpacityEnd = (e: TransitionEvent) => {
-            if (e.propertyName !== 'opacity') return
-            veil.removeEventListener('transitionend', onOpacityEnd)
-            onFadeDone()
-          }
-          veil.addEventListener('transitionend', onOpacityEnd)
-          clearVeilFadeTimer()
-          veilFadeEndTimer = window.setTimeout(onFadeDone, VEIL_FADE_OUT_MS)
-          return
-        }
-
-        veil.classList.toggle('video-module-full-veil--visible', showFullVeil)
-        veil.classList.toggle('video-module-full-veil--buffering', blackOverlay)
-      }
-
-      onEndedHandler = () => {
-        isWaiting = false
-        onReachEnd()
-      }
-
-      player.on('timeupdate', onTimeUpdate)
-      player.on('ended', onEndedHandler)
-
-      onStateForEmbed = () => applyEmbedChromeLock()
-
-      onWaiting = () => {
-        isWaiting = true
-        applyEmbedChromeLock()
-      }
-      onBufferingDone = () => {
-        isWaiting = false
-        applyEmbedChromeLock()
-      }
-      onPlayingForVeil = () => {
-        isWaiting = false
-        applyEmbedChromeLock()
-      }
-
-      player.on('ready', onStateForEmbed)
-      player.on('pause', onStateForEmbed)
-      player.on('playing', onPlayingForVeil)
-      player.on('ended', onStateForEmbed)
-      player.on('seeked', onStateForEmbed)
-      player.on('timeupdate', onStateForEmbed)
-      player.on('waiting', onWaiting)
-      player.on('stalled', onWaiting)
-      player.on('canplay', onBufferingDone)
-      player.on('canplaythrough', onBufferingDone)
-
-      queueMicrotask(applyEmbedChromeLock)
-      lateTimer = window.setTimeout(applyEmbedChromeLock, 100)
-      lateTimer2 = window.setTimeout(applyEmbedChromeLock, 600)
-
-      pollId = window.setInterval(applyEmbedChromeLock, 150)
-
-      mo = new MutationObserver(applyEmbedChromeLock)
-      mo.observe(container, { childList: true, subtree: true })
     })()
 
     return () => {
       cancelled = true
-      if (veilFadeEndTimer !== undefined) window.clearTimeout(veilFadeEndTimer)
-      if (lateTimer !== undefined) window.clearTimeout(lateTimer)
-      if (lateTimer2 !== undefined) window.clearTimeout(lateTimer2)
       if (pollId !== undefined) window.clearInterval(pollId)
       mo?.disconnect()
       if (player) {
-        try {
-          if (onTimeUpdate) player.off('timeupdate', onTimeUpdate)
-          if (onEndedHandler) player.off('ended', onEndedHandler)
-          if (onWaiting) {
-            player.off('waiting', onWaiting)
-            player.off('stalled', onWaiting)
-          }
-          if (onBufferingDone) {
-            player.off('canplay', onBufferingDone)
-            player.off('canplaythrough', onBufferingDone)
-          }
-          if (onPlayingForVeil) player.off('playing', onPlayingForVeil)
-          if (onStateForEmbed) {
-            player.off('ready', onStateForEmbed)
-            player.off('pause', onStateForEmbed)
-            player.off('ended', onStateForEmbed)
-            player.off('seeked', onStateForEmbed)
-            player.off('timeupdate', onStateForEmbed)
-          }
-        } catch {
-          /* noop */
-        }
-        try {
-          player.destroy()
-        } catch {
-          /* noop */
-        }
+        try { player.destroy() } catch { /* noop */ }
       }
+      setEmbedReady(false)
+      setPaused(true)
+      setEnded(false)
+      setWaiting(false)
+      setHiding(false)
     }
-  }, [provider, embedId, onReachEnd])
+  }, [provider, embedId, moduleId, onReachEnd])
 
   if (direct) {
     return (
@@ -348,15 +245,27 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
   }
 
   if (provider && embedId) {
+    const veilVisible = showVeil || hiding
+    const veilClasses = [
+      'video-module-full-veil',
+      veilVisible ? 'video-module-full-veil--visible' : '',
+      blackOverlay ? 'video-module-full-veil--buffering' : '',
+      hiding ? 'video-module-full-veil--hiding' : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
     return (
       <div className="video-module-plyr-host relative aspect-video w-full rounded-xl overflow-hidden shadow-lg bg-black">
         <div
-          key={embedId}
+          key={`${moduleId}-${embedId}`}
           ref={embedRef}
           className="h-full w-full"
           data-plyr-provider={provider}
           data-plyr-embed-id={embedId}
         />
+        {/* Veil rendered in React — auto-cleaned on unmount, no stale DOM */}
+        <div className={veilClasses} />
       </div>
     )
   }
