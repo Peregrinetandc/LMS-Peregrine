@@ -150,22 +150,9 @@ export default function QuizTakeClient({
   }, [startedAt, result, quizStarted, deadlineAt, timeExpired, questions])
 
   useEffect(() => {
-    if (hasTimeLimit) return
-    const raw = window.localStorage.getItem(draftKey)
-    if (!raw) return
-    try {
-      const parsed = JSON.parse(raw) as Record<string, string>
-      setAnswers(parsed)
-      setQuizStarted(true)
-    } catch {
-      window.localStorage.removeItem(draftKey)
-    }
-  }, [draftKey, hasTimeLimit])
-
-  useEffect(() => {
-    if (result || hasTimeLimit) return
+    if (result || hasTimeLimit || !quizStarted) return
     window.localStorage.setItem(draftKey, JSON.stringify(answers))
-  }, [answers, draftKey, result, hasTimeLimit])
+  }, [answers, draftKey, result, hasTimeLimit, quizStarted])
 
   if (questions.length === 0) {
     return (
@@ -209,20 +196,14 @@ export default function QuizTakeClient({
                 setError('')
                 setReviewRows([])
                 setSubmittedNow(false)
-                setQuizStarted(true)
-                const now = Date.now()
-                setStartedAt(now)
+                setConfirmOpen(false)
+                setQuizStarted(false)
+                setStartedAt(Date.now())
                 setElapsedSec(0)
                 setTimeExpired(false)
                 timeUpHandledRef.current = false
-                if (hasTimeLimit && timeLimitMinutes) {
-                  const dl = now + timeLimitMinutes * 60_000
-                  setDeadlineAt(dl)
-                  setRemainingSec(Math.max(0, Math.floor((dl - Date.now()) / 1000)))
-                } else {
-                  setDeadlineAt(null)
-                  setRemainingSec(0)
-                }
+                setDeadlineAt(null)
+                setRemainingSec(0)
                 window.localStorage.removeItem(draftKey)
               }}
               className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
@@ -313,23 +294,11 @@ export default function QuizTakeClient({
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
           <li>Read each question carefully and choose one option.</li>
           <li>Submit only when all questions are answered.</li>
-          <li>Your best quiz score is used for marks and pass status.</li>
+          <li>Your best quiz attempt will be used for grading.</li>
           {!allowRetest && <li>Retest is disabled for this quiz by your instructor.</li>}
-          {questionsRandomized && (
-            <li className="font-medium text-slate-800">
-              Questions are shown in a randomized order for you.
-            </li>
-          )}
-          {!hasTimeLimit && (
-            <li className="text-slate-500">
-              Exam-style tip: ask your instructor to set a time limit (e.g. 60 minutes) and randomize
-              questions in the course builder so answer keys are harder to share.
-            </li>
-          )}
           {hasTimeLimit && (
             <li>
-              You have <strong>{timeLimitMinutes} minutes</strong> once you start. The timer counts down in
-              your browser.
+              You have <strong>{timeLimitMinutes} minutes</strong> once you start.
             </li>
           )}
         </ul>
@@ -337,6 +306,8 @@ export default function QuizTakeClient({
           type="button"
           onClick={() => {
             const now = Date.now()
+            setAnswers({})
+            window.localStorage.removeItem(draftKey)
             setQuizStarted(true)
             setStartedAt(now)
             setElapsedSec(0)
