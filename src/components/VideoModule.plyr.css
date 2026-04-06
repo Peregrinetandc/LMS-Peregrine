@@ -1,0 +1,49 @@
+/* Wrapper needs a positioning context for the injected full veil */
+.video-module-plyr-host .plyr .plyr__video-wrapper {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Full-area veil — pre-play: gradient; after ready: black while paused or buffering */
+.video-module-plyr-host .plyr__video-wrapper .video-module-full-veil {
+  --veil-fade-duration: 0.48s;
+
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.video-module-plyr-host .plyr__video-wrapper .video-module-full-veil.video-module-full-veil--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Fade-out (resume / buffering ended): keep visible until opacity hits 0 */
+.video-module-plyr-host .plyr__video-wrapper .video-module-full-veil.video-module-full-veil--visible.video-module-full-veil--hiding {
+  opacity: 0;
+  visibility: visible;
+  transition: opacity var(--veil-fade-duration) ease-out, visibility 0s linear var(--veil-fade-duration);
+}
+
+/* Black overlay — solid; same fade duration when .video-module-full-veil--hiding */
+.video-module-plyr-host .plyr__video-wrapper .video-module-full-veil.video-module-full-veil--buffering {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: #000;
+  box-shadow: none;
+}
+
+/* Before first `playing`: hide iframe chrome until user starts — veil covers the box */
+.video-module-plyr-host .plyr:not(.video-module-embed-ready) iframe {
+  opacity: 0 !important;
+}
+
+.video-module-plyr-host .plyr.video-module-embed-ready iframe {
+  opacity: 1 !important;
+  transition: opacity 0.2s ease;
+}
