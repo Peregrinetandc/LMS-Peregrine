@@ -70,6 +70,7 @@ export async function getLearnerModuleStatusMap(
 
   const assignIdByModule = new Map<string, string>()
   const deadlineByModule = new Map<string, string | null>()
+  const assignmentSubmittedByModule = new Map<string, boolean>()
 
   if (assignmentModuleIds.length > 0) {
     const { data: assigns } = await supabase
@@ -79,21 +80,24 @@ export async function getLearnerModuleStatusMap(
 
     for (const a of assigns ?? []) {
       assignIdByModule.set(a.module_id as string, a.id as string)
-      deadlineByModule.set(a.module_id as string, (a.deadline_at as string | null) ?? null)
+      deadlineByModule.set(a.module_id as string, (a.deadline_at as string | null) ?? null)      
     }
   }
 
-  const submissionByAssignment = new Map<string, { graded_at: string | null }>()
+  const submissionByAssignment = new Map<string, { graded_at: string | null, submitted_at: string | null }>()
   const assignmentIds = [...new Set([...assignIdByModule.values()])]
   if (assignmentIds.length > 0) {
     const { data: subs } = await supabase
       .from('submissions')
-      .select('assignment_id, graded_at')
+      .select('assignment_id, graded_at, submitted_at')
       .eq('learner_id', learnerId)
       .in('assignment_id', assignmentIds)
 
     for (const s of subs ?? []) {
-      submissionByAssignment.set(s.assignment_id as string, { graded_at: (s.graded_at as string | null) ?? null })
+      submissionByAssignment.set(s.assignment_id as string, { 
+        graded_at: (s.graded_at as string | null) ?? null,
+        submitted_at: (s.submitted_at as string | null) ?? null
+      })
     }
   }
 
@@ -123,7 +127,8 @@ export async function getLearnerModuleStatusMap(
       const graded = !!sub?.graded_at
       const complete = progDone || graded
       const deadline = deadlineByModule.get(pid) ?? null
-      const overdue = !!deadline && !complete && new Date(deadline).getTime() < now
+      const submitted = !!sub?.submitted_at;
+      const overdue = !!deadline && !complete && !submitted && new Date(deadline).getTime() < now
       out[pid] = { complete, overdue }
       continue
     }
