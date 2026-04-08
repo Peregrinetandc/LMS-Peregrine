@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type ModuleUiStatus = { complete: boolean; overdue: boolean }
+export type ModuleUiStatus = { 
+  complete: boolean;
+  overdue: boolean;
+  in_grading?: boolean; // for assignments: submitted but not graded yet
+}
 
 type Mod = { id: string; type: string | null }
 
@@ -20,7 +24,10 @@ export async function getLearnerModuleStatusMap(
   void _courseId
   const out: Record<string, ModuleUiStatus> = {}
   for (const m of modules) {
-    out[m.id] = { complete: false, overdue: false }
+    out[m.id] = {
+      complete: false,
+      overdue: false
+     }
   }
   if (modules.length === 0) return out
 
@@ -70,7 +77,6 @@ export async function getLearnerModuleStatusMap(
 
   const assignIdByModule = new Map<string, string>()
   const deadlineByModule = new Map<string, string | null>()
-  const assignmentSubmittedByModule = new Map<string, boolean>()
 
   if (assignmentModuleIds.length > 0) {
     const { data: assigns } = await supabase
@@ -128,8 +134,9 @@ export async function getLearnerModuleStatusMap(
       const complete = progDone || graded
       const deadline = deadlineByModule.get(pid) ?? null
       const submitted = !!sub?.submitted_at;
+      const in_grading = submitted && !graded;
       const overdue = !!deadline && !complete && !submitted && new Date(deadline).getTime() < now
-      out[pid] = { complete, overdue }
+      out[pid] = { complete, overdue, in_grading }
       continue
     }
 

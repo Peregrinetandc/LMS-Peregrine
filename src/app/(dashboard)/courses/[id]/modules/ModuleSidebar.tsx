@@ -245,7 +245,16 @@ export default function ModuleSidebar({
                               >
                                 Overdue
                               </span>
-                            )}
+                            )}{
+                              (ui?.in_grading && !ui.complete) && (
+                                <span
+                                  className="shrink-0 text-xs font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded"
+                                  title="In grading"
+                                >
+                                  In grading
+                                </span>
+                              )
+                            }
                           </Link>
                         </li>
                       )

@@ -299,7 +299,14 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                                   Overdue
                                 </span>
                               )}
-                              <ChevronRight className="w-4 h-4 text-amber-400 group-hover:text-amber-600 flex-shrink-0 hidden sm:block" />
+                              {
+                              (ui?.in_grading && !ui.complete) && (
+                                <span className="shrink-0 text-xs font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded" title="In grading">
+                                  In grading
+                                </span>
+                              )
+                            }
+                              <ChevronRight className="w-4 h-4 text-amber-400 group-hover:text-amber-600 shrink-0 hidden sm:block" />
                             </div>
                             <div className="flex flex-wrap items-center gap-2 pl-7 text-xs text-slate-600 sm:pl-0">
                               {isTimeLocked && (
@@ -330,9 +337,9 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                         >
                           {moduleIcon(mod.type)}
                           <span className="flex-1 text-sm text-slate-400 truncate">{mod.title}</span>
-                          <Lock className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                          <Lock className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                           {isTimeLocked && (
-                            <span className="text-xs text-slate-400 flex-shrink-0">
+                            <span className="text-xs text-slate-400 shrink-0">
                               Unlocks {new Date(mod.available_from).toLocaleDateString()}
                             </span>
                           )}
@@ -357,7 +364,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                               Overdue
                             </span>
                           )}
-                          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 flex-shrink-0" />
+                          {ui?.in_grading && !ui?.complete && (
+                            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0" title="In grading">
+                              In grading
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 shrink-0" />
                         </Link>
                       )
                     })}
