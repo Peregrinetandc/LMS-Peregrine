@@ -37,13 +37,13 @@ function isProbablyDirectVideo(url: string): boolean {
 
 async function markVideoCompleteOnce(moduleId: string, doneRef: { current: boolean }) {
   if (doneRef.current) return
-  doneRef.current = true
   const supabase = createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return
-  await supabase.from('module_progress').upsert(
+  doneRef.current = true
+  const { error } = await supabase.from('module_progress').upsert(
     {
       module_id: moduleId,
       learner_id: user.id,
@@ -52,7 +52,12 @@ async function markVideoCompleteOnce(moduleId: string, doneRef: { current: boole
       completed_at: new Date().toISOString(),
     },
     { onConflict: 'module_id,learner_id' },
-  )
+  );
+
+  if (error) {
+    console.error("Supabase Error:", error);
+    doneRef.current = false;
+  }
 }
 
 export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) {
@@ -104,6 +109,8 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
   const onReachEnd = useCallback(() => {
     const run = async () => {
       await markVideoCompleteOnce(moduleId, doneRef)
+      // BROADCAST COMPLETION TO OTHER COMPONENTS
+      window.dispatchEvent(new Event('module-completed'))
       router.refresh()
     }
     void run()
@@ -194,7 +201,7 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
       })
 
       player.on('timeupdate', () => {
-        if (cancelled) return
+        if (cancelled || doneRef.current) return
         const d = player.duration
         const t = player.currentTime
         if (Number.isFinite(d) && d > 0 && d - t <= END_SECONDS_THRESHOLD) {

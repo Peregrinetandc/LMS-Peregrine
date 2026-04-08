@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import { createClient } from '@/utils/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -7,6 +10,7 @@ import { shuffleDeterministic } from '@/lib/shuffle-deterministic'
 import FeedbackSubmitClient from '@/components/FeedbackSubmitClient'
 import ExternalResourceLinks from '@/components/ExternalResourceLinks'
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, MapPin } from 'lucide-react'
+import NextLessonButton from './NextLessonButton'
 
 function sortNested<T extends { sort_order?: number }>(arr: T[] | null | undefined): T[] {
   return [...(arr ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -548,32 +552,12 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
       )}
 
       {enrollment && !isCourseStaff && showNextButtonForType && (
-        <div className="space-y-2 pt-2">
-          <div className="flex justify-end">
-          {canGoNext ? (
-            <Link
-              href={`/courses/${courseId}/modules/${nextModule!.id}`}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              Next lesson
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600"
-              title={nextDisabledReason}
-            >
-              Next lesson
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          )}
-          </div>
-          {!canGoNext && (
-            <p className="text-right text-xs text-slate-500">{nextDisabledReason}</p>
-          )}
-        </div>
+        <NextLessonButton 
+          courseId={courseId}
+          nextModule={nextModule}
+          initialCompleted={currentModuleComplete}
+          nextDisabledReason={nextDisabledReason}
+        />
       )}
 
     </div>
