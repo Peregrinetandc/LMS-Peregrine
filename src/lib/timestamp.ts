@@ -15,16 +15,17 @@ export function toDatetimeLocalValue(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export function formatLocalDisplay( iso: string | null | undefined, includeTime: boolean = true): string {
+export function formatLocalDisplay(
+  iso: string | null | undefined,
+  includeTime = true
+): string {
   if (!iso) return 'N/A'
-  
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return 'Invalid Date'
 
-  const options: Intl.DateTimeFormatOptions = {
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     dateStyle: 'medium',
-    ...(includeTime && { timeStyle: 'short' })
-  }
-
-  return d.toLocaleString(undefined, options)
+    ...(includeTime && { timeStyle: 'short' }),
+  })
 }

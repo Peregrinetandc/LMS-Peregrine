@@ -49,7 +49,7 @@ export function LoginForm({
                   role="alert"
                   className="flex flex-inline gap-2 items-center border border-red-200 rounded-lg bg-red-50 p-2 text-sm font-medium text-red-800"
                 >
-                  <AlertCircle className="inline h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                  <AlertCircle className="inline h-4 w-4 shrink-0" aria-hidden="true" />
                   {errorMessage}
                 </div>
               ) : null}
