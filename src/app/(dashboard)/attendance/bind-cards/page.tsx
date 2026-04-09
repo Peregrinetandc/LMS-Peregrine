@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppCard, PageHeader } from '@/components/ui/primitives'
 import BindCardsClient from './BindCardsClient'
 import type { AttendanceCourseOption } from '../AttendanceClient'
+import { ROLES, isStaffRole } from '@/lib/roles'
 
 export default async function BindOfflineIdCardsPage() {
   const supabase = await createClient()
@@ -12,13 +13,13 @@ export default async function BindOfflineIdCardsPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-  const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
+  const role = profile?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     redirect('/unauthorized')
   }
 
   let coursesQuery = supabase.from('courses').select('id, title, course_code').order('title')
-  if (role !== 'admin' && role !== 'card_coordinator') {
+  if (role !== ROLES.ADMIN && role !== ROLES.COORDINATOR) {
     coursesQuery = coursesQuery.eq('instructor_id', user.id)
   }
   const { data: courses } = await coursesQuery
@@ -33,8 +34,8 @@ export default async function BindOfflineIdCardsPage() {
       <AppCard className="p-2">
         <BindCardsClient
           courses={courseList}
-          allowUnbind={role === 'admin' || role === 'instructor'}
-          isAdmin={role === 'admin'}
+          allowUnbind={role === ROLES.ADMIN || role === ROLES.INSTRUCTOR}
+          isAdmin={role === ROLES.ADMIN}
         />
       </AppCard>
     </div>

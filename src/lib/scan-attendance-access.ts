@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
+import { ROLES, isStaffRole } from '@/lib/roles'
 
-/** Same course scope as bind-cards: admin + card_coordinator = any course; instructor = own only. */
+/** Same course scope as bind-cards: admin + coordinator = any course; instructor = own only. */
 export async function requireScanAttendanceCourseAccess(courseId: string) {
   const supabase = await createClient()
   const {
@@ -11,8 +12,8 @@ export async function requireScanAttendanceCourseAccess(courseId: string) {
   }
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
+  const role = profile?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
 
@@ -20,7 +21,7 @@ export async function requireScanAttendanceCourseAccess(courseId: string) {
   if (!course) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
-  if (role !== 'admin' && role !== 'card_coordinator' && course.instructor_id !== user.id) {
+  if (role !== ROLES.ADMIN && role !== ROLES.COORDINATOR && course.instructor_id !== user.id) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
 

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { ROLES, isStaffRole } from '@/lib/roles'
 import {
   normalizeOfflinePublicCode,
   OFFLINE_ID_CODE_RE,
@@ -18,8 +19,8 @@ async function requireStaffAndCourseAccess(courseId: string) {
   }
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
+  const role = profile?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
 
@@ -27,7 +28,7 @@ async function requireStaffAndCourseAccess(courseId: string) {
   if (!course) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
-  if (role !== 'admin' && role !== 'card_coordinator' && course.instructor_id !== user.id) {
+  if (role !== ROLES.ADMIN && role !== ROLES.COORDINATOR && course.instructor_id !== user.id) {
     return { supabase, user, error: 'FORBIDDEN' as const }
   }
 
@@ -49,8 +50,8 @@ export async function lookupOfflineIdCard(publicCode: string): Promise<LookupOff
   }
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
+  const role = profile?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     return { ok: false, code: 'FORBIDDEN', message: 'You do not have access.' }
   }
 
@@ -190,11 +191,11 @@ export async function unbindOfflineIdCard(input: {
   }
 
   const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (prof?.role === 'card_coordinator') {
-    return { ok: false, code: 'FORBIDDEN', message: 'Card coordinators cannot unbind ID cards.' }
+  if (prof?.role === ROLES.COORDINATOR) {
+    return { ok: false, code: 'FORBIDDEN', message: 'Coordinators cannot unbind ID cards.' }
   }
 
-  const isAdmin = prof?.role === 'admin'
+  const isAdmin = prof?.role === ROLES.ADMIN
 
   const { data: card, error: cardErr } = await supabase
     .from('offline_learner_id_cards')

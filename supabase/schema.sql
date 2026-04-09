@@ -1,7 +1,7 @@
 -- ============================================================
 -- Peregrine T&C – Full database schema (baseline + migrations)
 -- Source of truth: mirrors supabase/migrations/*.sql through
--- 20260404120000_card_coordinator_role.sql, 20260405120000_id_card_scan_attendance_rls.sql
+-- 20260404120000_coordinator_role.sql, 20260405120000_id_card_scan_attendance_rls.sql
 -- Use: Supabase SQL Editor for a greenfield project, or compare
 -- against `supabase db dump` / migration history.
 -- Then run supabase/seed.sql (see that file for production vs demo usage).
@@ -13,7 +13,7 @@ create extension if not exists "pgcrypto";
 -- ──────────────────────────────────────────────
 -- 1. PROFILES (extends auth.users)
 -- ──────────────────────────────────────────────
-create type user_role as enum ('admin', 'instructor', 'learner', 'card_coordinator');
+create type user_role as enum ('admin', 'instructor', 'learner', 'coordinator');
 
 create table public.profiles (
   id            uuid primary key references auth.users on delete cascade,
@@ -443,7 +443,7 @@ revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_admin() to service_role;
 
-create or replace function public.is_card_coordinator()
+create or replace function public.is_coordinator()
 returns boolean
 language sql
 security definer
@@ -452,13 +452,13 @@ stable
 as $$
   select exists (
     select 1 from public.profiles p
-    where p.id = auth.uid() and p.role = 'card_coordinator'::public.user_role
+    where p.id = auth.uid() and p.role = 'coordinator'::public.user_role
   );
 $$;
 
-revoke all on function public.is_card_coordinator() from public;
-grant execute on function public.is_card_coordinator() to authenticated;
-grant execute on function public.is_card_coordinator() to service_role;
+revoke all on function public.is_coordinator() from public;
+grant execute on function public.is_coordinator() to authenticated;
+grant execute on function public.is_coordinator() to service_role;
 
 -- ──────────────────────────────────────────────
 -- ROW LEVEL SECURITY
@@ -488,10 +488,10 @@ alter table public.certificates enable row level security;
 create policy "Users view modules" on public.modules for select to authenticated
 using (exists (select 1 from public.courses where courses.id = modules.course_id and (courses.status = 'published' or courses.instructor_id = auth.uid())));
 
-create policy "Admins and card coordinators view all modules" on public.modules
+create policy "Admins and coordinators view all modules" on public.modules
   for select
   to authenticated
-  using (public.is_admin() or public.is_card_coordinator());
+  using (public.is_admin() or public.is_coordinator());
 
 create policy "Users view sections" on public.sections for select to authenticated
 using (exists (select 1 from public.courses where courses.id = sections.course_id and (courses.status = 'published' or courses.instructor_id = auth.uid())));
@@ -883,10 +883,10 @@ create policy "Admins view all enrollments" on public.enrollments
   to authenticated
   using (public.is_admin());
 
-create policy "Card coordinators view all enrollments" on public.enrollments
+create policy "Coordinators view all enrollments" on public.enrollments
   for select
   to authenticated
-  using (public.is_card_coordinator());
+  using (public.is_coordinator());
 
 -- Submissions: learners CRUD own rows; course instructors can read (grading)
 drop policy if exists "Learners manage own submissions" on public.submissions;
@@ -984,10 +984,10 @@ create policy "Admins view all courses" on public.courses
   for select to authenticated
   using (public.is_admin());
 
-create policy "Card coordinators view all courses" on public.courses
+create policy "Coordinators view all courses" on public.courses
   for select
   to authenticated
-  using (public.is_card_coordinator());
+  using (public.is_coordinator());
 
 create policy "Staff view learner profiles" on public.profiles
   for select to authenticated
@@ -1006,7 +1006,7 @@ create policy "Staff view learner profiles" on public.profiles
       where s.learner_id = profiles.id and c.instructor_id = auth.uid()
     )
     or (
-      public.is_card_coordinator()
+      public.is_coordinator()
       and exists (select 1 from public.enrollments e where e.learner_id = profiles.id)
     )
   );
@@ -1071,11 +1071,11 @@ create policy "Staff manage session roster" on public.module_session_roster
     )
   );
 
-create policy "Card coordinators manage session roster" on public.module_session_roster
+create policy "Coordinators manage session roster" on public.module_session_roster
   for all
   to authenticated
-  using (public.is_card_coordinator())
-  with check (public.is_card_coordinator());
+  using (public.is_coordinator())
+  with check (public.is_coordinator());
 
 -- Offline physical ID cards (QR pool + bind); see migration 20260402100000
 create or replace function public._offline_random_segment(p_len int)
@@ -1152,8 +1152,8 @@ as $$
 begin
   if old.learner_id is not null
      and new.learner_id is null
-     and public.is_card_coordinator() then
-    raise exception 'card coordinators cannot unbind id cards';
+     and public.is_coordinator() then
+    raise exception 'coordinators cannot unbind id cards';
   end if;
   return new;
 end;
@@ -1180,7 +1180,7 @@ create policy "Staff read offline id cards"
   to authenticated
   using (
     public.is_admin()
-    or public.is_card_coordinator()
+    or public.is_coordinator()
     or (
       learner_id is null
       or exists (
@@ -1235,12 +1235,12 @@ create policy "Instructors update offline id cards for their courses"
     )
   );
 
-create policy "Card coordinators update offline id cards for binding"
+create policy "Coordinators update offline id cards for binding"
   on public.offline_learner_id_cards
   for update
   to authenticated
-  using (public.is_card_coordinator())
-  with check (public.is_card_coordinator());
+  using (public.is_coordinator())
+  with check (public.is_coordinator());
 
 create or replace function public.mint_offline_id_cards(
   p_count int,

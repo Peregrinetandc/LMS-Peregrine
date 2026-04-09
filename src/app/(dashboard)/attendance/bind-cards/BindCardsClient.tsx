@@ -50,7 +50,7 @@ export default function BindCardsClient({
   isAdmin,
 }: {
   courses: AttendanceCourseOption[]
-  /** Instructors and admins may unbind; card coordinators may not. */
+  /** Instructors and admins may unbind; coordinators may not. */
   allowUnbind: boolean
   /** Admins may unbind without the bound learner appearing in the selected course roster. */
   isAdmin: boolean

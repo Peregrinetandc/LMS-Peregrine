@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { DashboardLearnerWidgets } from '@/components/internship/DashboardLearnerWidgets'
 import { LogOut, Sparkles } from 'lucide-react'
 import DashboardNavDrawer, { type NavLinkSections } from '@/components/DashboardNavDrawer'
+import { ROLES, isInstructorRole } from '@/lib/roles'
 
 const PEREGRINE_AI_HREF = 'https://ai.peregrinehub.com/'
 
@@ -23,13 +24,13 @@ export default async function DashboardLayout({
     .eq('id', user.id)
     .single()
 
-  const role = profile?.role ?? 'learner'
+  const role = profile?.role ?? ROLES.LEARNER
   const name = profile?.full_name ?? user.email ?? 'User'
-  const roleLabel = role === 'card_coordinator' ? 'Card coordinator' : role
+  const roleLabel = role === ROLES.COORDINATOR ? 'Coordinator' : role
 
-  const isInstructor = role === 'instructor' || role === 'admin'
-  const isAdmin = role === 'admin'
-  const isCardCoordinator = role === 'card_coordinator'
+  const isInstructor = isInstructorRole(role)
+  const isAdmin = role === ROLES.ADMIN
+  const isCardCoordinator = role === ROLES.COORDINATOR
 
   const navSections: NavLinkSections = isCardCoordinator
     ? [
@@ -42,6 +43,7 @@ export default async function DashboardLayout({
             icon: 'idCardScanAttendance',
           },
         ],
+        [{ href: '/grading', label: 'Grading', icon: 'grading' }],
         [{ href: PEREGRINE_AI_HREF, label: 'Peregrine AI', icon: 'aiExternal', external: true }],
       ]
     : [
@@ -135,7 +137,7 @@ export default async function DashboardLayout({
         {children}
       </main>
 
-      <DashboardLearnerWidgets show={role === 'learner'} />
+      <DashboardLearnerWidgets show={role === ROLES.LEARNER} />
 
       {process.env.NODE_ENV === 'development' && (
         <aside

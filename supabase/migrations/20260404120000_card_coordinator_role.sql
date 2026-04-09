@@ -1,7 +1,7 @@
--- Card coordinator: bind ID cards across courses; no unbind (enforced in app + trigger).
--- Enum value is added in 20260404115900_card_coordinator_enum_value.sql (separate migration).
+-- Coordinator: bind ID cards across courses; no unbind (enforced in app + trigger).
+-- Enum value is added in 20260404115900_coordinator_enum_value.sql (separate migration).
 
-create or replace function public.is_card_coordinator()
+create or replace function public.is_coordinator()
 returns boolean
 language sql
 security definer
@@ -10,29 +10,29 @@ stable
 as $$
   select exists (
     select 1 from public.profiles p
-    where p.id = auth.uid() and p.role = 'card_coordinator'::public.user_role
+    where p.id = auth.uid() and p.role = 'coordinator'::public.user_role
   );
 $$;
 
-revoke all on function public.is_card_coordinator() from public;
-grant execute on function public.is_card_coordinator() to authenticated;
-grant execute on function public.is_card_coordinator() to service_role;
+revoke all on function public.is_coordinator() from public;
+grant execute on function public.is_coordinator() to authenticated;
+grant execute on function public.is_coordinator() to service_role;
 
 -- Courses: full list for bind dropdown (same as admin bind UX).
-create policy "Card coordinators view all courses"
+create policy "Coordinators view all courses"
   on public.courses
   for select
   to authenticated
-  using (public.is_card_coordinator());
+  using (public.is_coordinator());
 
 -- Enrollments: roster for bind flow.
-create policy "Card coordinators view all enrollments"
+create policy "Coordinators view all enrollments"
   on public.enrollments
   for select
   to authenticated
-  using (public.is_card_coordinator());
+  using (public.is_coordinator());
 
--- Profiles: card coordinators see learners who have at least one enrollment (roster names; not full admin visibility).
+-- Profiles: coordinators see learners who have at least one enrollment (roster names; not full admin visibility).
 drop policy if exists "Staff view learner profiles" on public.profiles;
 
 create policy "Staff view learner profiles"
@@ -54,7 +54,7 @@ create policy "Staff view learner profiles"
       where s.learner_id = profiles.id and c.instructor_id = auth.uid()
     )
     or (
-      public.is_card_coordinator()
+      public.is_coordinator()
       and exists (select 1 from public.enrollments e where e.learner_id = profiles.id)
     )
   );
@@ -67,7 +67,7 @@ create policy "Staff read offline id cards"
   to authenticated
   using (
     public.is_admin()
-    or public.is_card_coordinator()
+    or public.is_coordinator()
     or (
       course_id is null
       or exists (
@@ -79,14 +79,14 @@ create policy "Staff read offline id cards"
     )
   );
 
-create policy "Card coordinators update offline id cards for binding"
+create policy "Coordinators update offline id cards for binding"
   on public.offline_learner_id_cards
   for update
   to authenticated
-  using (public.is_card_coordinator())
-  with check (public.is_card_coordinator());
+  using (public.is_coordinator())
+  with check (public.is_coordinator());
 
--- Block unbind (clearing learner_id) for card coordinators at the database layer.
+-- Block unbind (clearing learner_id) for coordinators at the database layer.
 create or replace function public.offline_learner_id_cards_block_coordinator_unbind()
 returns trigger
 language plpgsql
@@ -96,8 +96,8 @@ as $$
 begin
   if old.learner_id is not null
      and new.learner_id is null
-     and public.is_card_coordinator() then
-    raise exception 'card coordinators cannot unbind id cards';
+     and public.is_coordinator() then
+    raise exception 'coordinators cannot unbind id cards';
   end if;
   return new;
 end;

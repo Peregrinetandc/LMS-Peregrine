@@ -1,7 +1,9 @@
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { redirect } from 'next/navigation'
 import GradingClient, { type GradingCourseOption } from './GradingClient'
 import { PageHeader } from '@/components/ui/primitives'
+import { ROLES, isStaffRole } from '@/lib/roles'
 
 export type GradingRow = {
   submissionId: string
@@ -28,25 +30,27 @@ export type GradingRow = {
 
 export default async function GradingPage() {
   const supabase = await createClient()
+  const admin = createAdminClient()
+  const db = admin ?? supabase
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-  const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin') {
+  const role = profile?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     redirect('/unauthorized')
   }
 
-  let coursesQuery = supabase.from('courses').select('id, title, course_code').order('title')
-  if (role !== 'admin') {
+  let coursesQuery = db.from('courses').select('id, title, course_code').order('title')
+  if (role === ROLES.INSTRUCTOR) {
     coursesQuery = coursesQuery.eq('instructor_id', user.id)
   }
 
   const { data: courses } = await coursesQuery
 
-  const { data: subs } = await supabase
+  const { data: subs } = await db
     .from('submissions')
     .select(
       'id, assignment_id, learner_id, is_turned_in, turned_in_at, submitted_at, score, feedback, graded_at, is_passed, file_url',
@@ -71,19 +75,19 @@ export default async function GradingPage() {
   >()
 
   if (assignmentIds.length > 0) {
-    const { data: asns } = await supabase
+    const { data: asns } = await db
       .from('assignments')
       .select('id, max_score, passing_score, module_id')
       .in('id', assignmentIds)
 
     const moduleIds = [...new Set((asns ?? []).map((a) => a.module_id))]
-    const { data: mods } = await supabase
+    const { data: mods } = await db
       .from('modules')
       .select('id, title, type, course_id')
       .in('id', moduleIds)
 
     const courseIds = [...new Set((mods ?? []).map((m) => m.course_id))]
-    const { data: crs } = await supabase.from('courses').select('id, title, course_code').in('id', courseIds)
+    const { data: crs } = await db.from('courses').select('id, title, course_code').in('id', courseIds)
 
     const courseMeta = new Map(
       (crs ?? []).map((c) => [c.id, { title: c.title, courseCode: c.course_code }]),
@@ -107,7 +111,7 @@ export default async function GradingPage() {
     for (const a of asns ?? []) {
       const m = modById.get(a.module_id)
       if (!m) continue
-      if (role === 'instructor' && !courses?.some((c) => c.id === m.courseId)) continue
+      if (role === ROLES.INSTRUCTOR && !courses?.some((c) => c.id === m.courseId)) continue
       assignmentMap.set(a.id, {
         max_score: a.max_score,
         passing_score: a.passing_score,
@@ -121,13 +125,13 @@ export default async function GradingPage() {
   }
 
   const learnerIds = [...new Set(submissionList.map((s) => s.learner_id))]
-  const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', learnerIds)
+  const { data: profs } = await db.from('profiles').select('id, full_name').in('id', learnerIds)
   const nameByLearner = new Map((profs ?? []).map((p) => [p.id, p.full_name]))
 
   const subIds = submissionList.map((s) => s.id)
   const filesBySub = new Map<string, { url: string; name: string }[]>()
   if (subIds.length > 0) {
-    const { data: sfiles } = await supabase
+    const { data: sfiles } = await db
       .from('submission_files')
       .select('submission_id, file_url, original_name')
       .in('submission_id', subIds)

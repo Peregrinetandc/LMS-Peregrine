@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppCard, PageHeader } from '@/components/ui/primitives'
 import IdCardScanAttendanceClient from './IdCardScanAttendanceClient'
 import type { AttendanceCourseOption } from '../AttendanceClient'
+import { ROLES, isStaffRole } from '@/lib/roles'
 
 export default async function IdCardScanAttendancePage() {
   const supabase = await createClient()
@@ -12,13 +13,13 @@ export default async function IdCardScanAttendancePage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin' && role !== 'card_coordinator') {
+  const role = profile?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     redirect('/unauthorized')
   }
 
   let coursesQuery = supabase.from('courses').select('id, title, course_code').order('title')
-  if (role !== 'admin' && role !== 'card_coordinator') {
+  if (role !== ROLES.ADMIN && role !== ROLES.COORDINATOR) {
     coursesQuery = coursesQuery.eq('instructor_id', user.id)
   }
   const { data: courses } = await coursesQuery

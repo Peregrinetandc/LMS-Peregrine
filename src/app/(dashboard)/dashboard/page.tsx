@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil, ArrowRight } from 'lucide-react'
 import { AppButton, AppCard, EmptyState, PageHeader } from '@/components/ui/primitives'
 import { formatLocalDisplay } from '@/lib/timestamp'
+import { ROLES, isInstructorRole } from '@/lib/roles'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -17,27 +18,43 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  const role = profile?.role ?? 'learner'
+  const role = profile?.role ?? ROLES.LEARNER
   const name = profile?.full_name ?? user.email?.split('@')[0] ?? 'there'
-  const isAdmin = role === 'admin'
-  const isInstructor = role === 'instructor' || role === 'admin'
+  const isAdmin = role === ROLES.ADMIN
+  const isInstructor = isInstructorRole(role)
 
-  if (role === 'card_coordinator') {
+  if (role === ROLES.COORDINATOR) {
     return (
       <div className="space-y-4 px-2 py-2">
-        <PageHeader title={`Welcome, ${name}!`} description="Card coordinator" />
+        <PageHeader title={`Welcome, ${name}!`} description="Coordinator" />
         <AppCard className="p-6 space-y-3">
           <p className="text-slate-700">
             Use <strong>Bind ID cards</strong> in the menu to assign printed learner cards for any course. You can
             bind cards across courses; unbinding is limited to instructors and admins.
           </p>
-          <Link
-            href="/attendance/bind-cards"
-            className="border border-blue-600 rounded-lg px-4 py-2 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
-          >
-            <ArrowRight className="w-4 h-4" />
-            Go to Bind ID cards
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/attendance/bind-cards"
+              className="border border-blue-600 rounded-lg px-4 py-2 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+            >
+              <ArrowRight className="w-4 h-4" />
+              Go to Bind ID cards
+            </Link>
+            <Link
+              href="/attendance/id-card-scan"
+              className="border border-blue-600 rounded-lg px-4 py-2 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+            >
+              <ArrowRight className="w-4 h-4" />
+              Scan ID attendance
+            </Link>
+            <Link
+              href="/grading"
+              className="border border-blue-600 rounded-lg px-4 py-2 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+            >
+              <ArrowRight className="w-4 h-4" />
+              Open grading
+            </Link>
+          </div>
         </AppCard>
       </div>
     )

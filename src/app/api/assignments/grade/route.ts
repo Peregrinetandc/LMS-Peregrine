@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { ROLES, isStaffRole } from '@/lib/roles'
 
 export const runtime = 'nodejs'
 
@@ -15,8 +16,8 @@ export async function PATCH(request: Request) {
   }
 
   const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = me?.role ?? 'learner'
-  if (role !== 'instructor' && role !== 'admin') {
+  const role = me?.role ?? ROLES.LEARNER
+  if (!isStaffRole(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -79,7 +80,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
-  if (role !== 'admin' && course.instructor_id !== user.id) {
+  if (role === ROLES.INSTRUCTOR && course.instructor_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
