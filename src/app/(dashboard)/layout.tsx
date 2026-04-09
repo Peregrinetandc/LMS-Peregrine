@@ -82,10 +82,9 @@ export default async function DashboardLayout({
                 <Image
                   src="/logo.png"
                   alt="Peregrine T&C"
-                  width={32}
-                  height={32}
+                  width={45}
+                  height={45}
                   className="shrink-0"
-                  style={{ width: 'auto', height: 'auto' }}
                 />
                 <span className="text-base font-bold text-slate-900 sm:text-lg">Peregrine T&C</span>
               </Link>
