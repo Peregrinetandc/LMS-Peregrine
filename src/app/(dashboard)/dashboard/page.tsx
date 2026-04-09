@@ -29,8 +29,7 @@ export default async function DashboardPage() {
         <PageHeader title={`Welcome, ${name}!`} description="Coordinator" />
         <AppCard className="p-6 space-y-3">
           <p className="text-slate-700">
-            Use <strong>Bind ID cards</strong> in the menu to assign printed learner cards for any course. You can
-            bind cards across courses; unbinding is limited to instructors and admins.
+            Use the below tools to manage ID card bindings, take attendance via ID card scanning, and grade assignments for all courses.
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
