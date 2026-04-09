@@ -21,6 +21,7 @@ import CourseManageBar from '@/components/CourseManageBar'
 import { groupModulesByWeek } from '@/lib/course-modules'
 import { getLearnerModuleStatusMap } from '@/lib/learner-module-status'
 import { toRenderableImageUrl } from '@/lib/drive-image'
+import { formatLocalDisplay } from '@/lib/timestamp'
 
 export default async function CourseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -140,7 +141,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
               alt=""
               className="h-44 w-full object-cover sm:h-56"
             />
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/35 to-transparent" />
+            <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-slate-950/35 to-transparent" />
           </div>
         )}
 
@@ -164,7 +165,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Starts</p>
                 <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-slate-800">
                   <CalendarDays className="h-4 w-4 text-slate-500" aria-hidden />
-                  {new Date(course.starts_at).toLocaleString()}
+                  {formatLocalDisplay(course.starts_at, false)}
                 </p>
               </div>
             )}
@@ -286,45 +287,14 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                               <span className="flex-1 text-sm font-medium text-slate-800 group-hover:text-amber-900 truncate">
                                 {mod.title}
                               </span>
-                              {ui?.complete && (
-                                <span
-                                  className="text-emerald-600 shrink-0"
-                                  title="Your progress: completed"
-                                  aria-label="Completed"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </span>
-                              )}
-                              {ui?.overdue && !ui?.complete && (
-                                <span className="text-xs font-medium text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
-                                  Overdue
-                                </span>
-                              )}
-                              {
-                              (ui?.in_grading && !ui.complete) && (
-                                <span className="shrink-0 text-xs font-medium text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded" title="In grading">
-                                  In grading
-                                </span>
-                              )
-                            }
                               <ChevronRight className="w-4 h-4 text-amber-400 group-hover:text-amber-600 shrink-0 hidden sm:block" />
                             </div>
                             <div className="flex flex-wrap items-center gap-2 pl-7 text-xs text-slate-600 sm:pl-0">
                               {isTimeLocked && (
                                 <span className="inline-flex items-center gap-1 text-slate-600">
                                   <Lock className="w-3 h-3" />
-                                  Learners locked until{' '}
-                                  {new Date(mod.available_from).toLocaleString()}
+                                  {formatLocalDisplay(mod.available_from, true)}
                                 </span>
-                              )}
-                              {!isTimeLocked && !isEnrolled && (
-                                <span className="inline-flex items-center gap-1 text-slate-600">
-                                  <Lock className="w-3 h-3" />
-                                  Learners need to enroll
-                                </span>
-                              )}
-                              {!isTimeLocked && isEnrolled && (
-                                <span className="text-slate-500">Learners can open this</span>
                               )}
                             </div>
                           </Link>
@@ -341,7 +311,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                           <Lock className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                           {isTimeLocked && (
                             <span className="text-xs text-slate-400 shrink-0">
-                              Unlocks {new Date(mod.available_from).toLocaleDateString()}
+                              Unlocks at {formatLocalDisplay(mod.available_from, true)}
                             </span>
                           )}
                         </div>

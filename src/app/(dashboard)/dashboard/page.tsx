@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil, ArrowRight } from 'lucide-react'
 import { AppButton, AppCard, EmptyState, PageHeader } from '@/components/ui/primitives'
+import { formatLocalDisplay } from '@/lib/timestamp'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -316,7 +317,7 @@ export default async function DashboardPage() {
                     className="flex flex-col gap-3 px-6 py-4 hover:bg-slate-50 transition group sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="bg-blue-50 p-2 rounded-lg flex-shrink-0">
+                      <div className="bg-blue-50 p-2 rounded-lg shrink-0">
                         <BookOpen className="w-4 h-4 text-blue-500" />
                       </div>
                       <div className="min-w-0">
@@ -370,7 +371,7 @@ export default async function DashboardPage() {
                   <span className="flex items-center gap-3 shrink-0">
                     <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      Due {new Date(a.deadlineAt).toLocaleString()}
+                      Due {formatLocalDisplay(a.deadlineAt, true)}
                     </span>
                     <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
                   </span>

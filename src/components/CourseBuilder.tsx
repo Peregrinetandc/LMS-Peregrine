@@ -1174,7 +1174,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
 
       {/* Course Details — save/publish errors use actionError near the action buttons */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
+        <div className="border-b border-slate-100 bg-linear-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
           <h2 className="text-lg font-semibold text-slate-900">
             {courseId ? 'Edit course' : 'Course Details'}
           </h2>
@@ -1335,7 +1335,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
 
       {/* Syllabus Builder */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
+        <div className="border-b border-slate-100 bg-linear-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
           <h2 className="text-lg font-semibold text-slate-900">Syllabus Builder</h2>
           <p className="mt-1 text-xs text-slate-500">
             Add lessons, reorder with drag-and-drop, then configure each lesson.
@@ -1359,11 +1359,11 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                     <div key={`week-${group.week}`} className="space-y-2">
                       <div className="flex items-center gap-3 my-2">
                         <div className="w-full flex items-center">
-                          <div className="flex-grow border-t border-dashed border-slate-300"></div>
+                          <div className="grow border-t border-dashed border-slate-300"></div>
                           <span className="mx-2 text-xs text-slate-400 uppercase tracking-widest">
                           week {group.week}
                           </span>
-                          <div className="flex-grow border-t border-dashed border-slate-300"></div>
+                          <div className="grow border-t border-dashed border-slate-300"></div>
                         </div>
                       </div>
                       {group.mods.map((mod) => (
@@ -1379,7 +1379,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                           >
                             <div className="flex min-w-0 items-center gap-2">
                               <span
-                                className="flex-shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500"
+                                className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500"
                                 title={`Week ${mod.week_index}`}
                               >
                                 W{mod.week_index}
@@ -1399,7 +1399,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                               <button
                                 type="button"
                                 onClick={(e) => copyModuleToClipboard(mod, e)}
-                                className="ml-auto flex-shrink-0 rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                className="ml-auto shrink-0 rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                                 title="Copy lesson"
                               >
                                 <Copy className="h-4 w-4" />
@@ -1649,7 +1649,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                             value={link.label}
                             onChange={(e) => updateExternalLinkRow(link.id, { label: e.target.value })}
                             placeholder="Label (e.g. Reading)"
-                            className="sm:max-w-[180px]"
+                            className="sm:max-w-45"
                           />
                           <FieldInput
                             type="url"
@@ -1971,7 +1971,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                 )}
               </div>
             ) : (
-              <div className="flex h-full min-h-[180px] items-center justify-center rounded-xl border border-dashed border-slate-200 text-sm text-slate-400">
+              <div className="flex h-full min-h-45 items-center justify-center rounded-xl border border-dashed border-slate-200 text-sm text-slate-400">
                 Select a lesson to configure it
               </div>
             )}

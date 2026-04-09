@@ -140,7 +140,7 @@ export default async function DashboardLayout({
       {process.env.NODE_ENV === 'development' && (
         <aside
           aria-label="Dashboard layout inspect"
-          className="fixed bottom-3 left-3 z-[100] max-h-[min(40vh,320px)] w-[min(100vw-1.5rem,28rem)] overflow-auto rounded-lg border border-amber-500/40 bg-amber-50/95 p-3 text-xs shadow-lg backdrop-blur dark:border-amber-600/50 dark:bg-amber-950/90 dark:text-amber-100"
+          className="fixed bottom-3 left-3 z-100 max-h-[min(40vh,320px)] w-[min(100vw-1.5rem,28rem)] overflow-auto rounded-lg border border-amber-500/40 bg-amber-50/95 p-3 text-xs shadow-lg backdrop-blur dark:border-amber-600/50 dark:bg-amber-950/90 dark:text-amber-100"
         >
           <details className="font-mono">
             <summary className="cursor-pointer select-none font-semibold text-amber-900 dark:text-amber-200">

@@ -94,7 +94,7 @@ export default async function CoursesPage() {
               href={`/courses/${course.id}`}
               className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md hover:border-blue-300 transition-all duration-200"
             >
-              <div className="relative h-40 bg-gradient-to-br from-blue-100 to-indigo-200 flex items-center justify-center">
+              <div className="relative h-40 bg-linear-to-br from-blue-100 to-indigo-200 flex items-center justify-center">
                 {course.thumbnail_url ? (
                   <Image
                     src={toRenderableImageUrl(course.thumbnail_url)}
@@ -113,7 +113,7 @@ export default async function CoursesPage() {
                 <p className="text-xs text-slate-500 mt-1">
                   <em className="not-italic font-medium text-slate-600">{course.course_code}</em>
                 </p>
-                <p className="text-sm text-slate-500 mt-1 line-clamp-2 min-h-[2.5rem]">
+                <p className="text-sm text-slate-500 mt-1 line-clamp-2 min-h-10">
                   {course.description ?? 'No description provided.'}
                 </p>
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
@@ -121,11 +121,7 @@ export default async function CoursesPage() {
                     <Users className="h-3.5 w-3.5" />
                     {(course.profiles as any)?.full_name ?? 'Unknown'}
                   </span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    course.enrollment_type === 'open'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-amber-100 text-amber-700'
-                  }`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${course.enrollment_type === 'open' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' }`}>
                     {course.enrollment_type === 'open' ? 'Open' : 'Invite Only'}
                   </span>
                 </div>

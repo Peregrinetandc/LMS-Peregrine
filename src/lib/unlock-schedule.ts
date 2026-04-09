@@ -14,22 +14,8 @@ export function unlockAtForWeek(
   return new Date(ms).toISOString()
 }
 
-/** Parse datetime-local value to ISO UTC, or null if empty/invalid. */
-export function fromDatetimeLocal(value: string | null | undefined): string | null {
-  if (value == null || value.trim() === '') return null
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toISOString()
-}
 
-/** Format ISO timestamptz for HTML datetime-local (local timezone). */
-export function toDatetimeLocalValue(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+export {fromDatetimeLocal, toDatetimeLocalValue} from "./timestamp"
 
 /** If stored unlock matches course schedule for this week, treat as auto. */
 export function deriveUnlockMode(
