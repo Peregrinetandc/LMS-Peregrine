@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
+import { toast } from 'sonner'
 
 export type QuizQuestionPublic = {
   id: string
@@ -452,9 +453,7 @@ useEffect(() => {
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
       {timeExpired && !result && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 animate-pulse">
-          Time&apos;s up! We are submitting your answers automatically...
-        </div>
+        toast.warning('Time\'s up! We are submitting your answers automatically...')
       )}
       <div className="fixed inset-x-0 top-0 z-50 rounded-none border-b border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur-md lg:sticky lg:top-18 lg:z-30 lg:mb-6 lg:rounded-xl lg:border lg:bg-slate-50/95">
         <div className="mx-auto max-w-3xl"> {/* Keeps content aligned with your quiz width */}
