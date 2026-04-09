@@ -17,7 +17,7 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
-    const msg = encodeURIComponent('Login failed. Please check your email and password and try again.')
+    const msg = encodeURIComponent('Invalid email or password!')
     redirect(`/login?message=${msg}`)
   }
 

@@ -3,9 +3,8 @@ import { Inter } from "next/font/google";
 import { SerwistProvider } from "./serwist-provider";
 import "./globals.css";
 import Script from "next/script";
-import { after } from "node:test";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 const APP_NAME = "Peregrine LMS";
 const APP_DEFAULT_TITLE = "Peregrine T&C | LMS";
@@ -67,7 +66,7 @@ export default function RootLayout({
           `}
         </Script>
       </head>
-      <body className={inter.className}>
+      <body className={inter.variable}>
         <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
       </body>
     </html>
