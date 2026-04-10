@@ -11,6 +11,7 @@ import {
 } from './actions'
 import { normalizeOfflinePublicCode, OFFLINE_ID_CODE_RE } from '@/lib/offline-id-card'
 import { Camera, XCircle } from 'lucide-react'
+import { formatLocalDisplay } from '@/lib/timestamp'
 
 type LogEntry = {
   id: string
@@ -115,6 +116,9 @@ export default function IdCardScanAttendanceClient({ courses }: { courses: Atten
   }, [courseId, moduleId, sessionsLoading, sessionsErr])
 
   async function onFinalizeAttendance() {
+    //add a confirm dialog here
+    if (!window.confirm('Are you sure you want to finalize attendance attendance?')) return
+    //end of confirm dialog
     if (!courseId || !moduleId) return
     setFinalizeBusy(true)
     setFinalizeErr(null)
@@ -232,7 +236,39 @@ export default function IdCardScanAttendanceClient({ courses }: { courses: Atten
 
   return (
     <div className="space-y-6">
+          <div className="flex flex-inline items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <div className="text-sm">
+              {submissionStatusLoading ? (
+                <span className="text-slate-500">Loading submission status…</span>
+              ) : submissionStatus?.submitted ? (
+                <span>
+                  <span className="font-semibold text-emerald-800">Attendance submitted</span>
+                  {submissionStatus.submittedAt ? (
+                    <span className="text-slate-600">
+                      {' '}
+                      · {formatLocalDisplay(submissionStatus.submittedAt)}
+                    </span>
+                  ) : null}
+                </span>
+              ) : (
+                <span className=" text-slate-800">Finalize attendance to submit it</span>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={finalizeBusy || submissionStatusLoading || !moduleId}
+              onClick={() => void onFinalizeAttendance()}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:opacity-50"
+            >
+              {finalizeBusy
+                ? 'Saving…'
+                : submissionStatus?.submitted
+                  ? 'Update submission time'
+                  : 'Finalize attendance'}
+            </button>
+          </div>
       <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        
         <h2 className="text-sm font-semibold text-slate-800">1. Course</h2>
         <select
           value={courseId}
@@ -275,39 +311,6 @@ export default function IdCardScanAttendanceClient({ courses }: { courses: Atten
           ))}
         </select>
 
-        {canScan && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <div className="text-sm">
-              {submissionStatusLoading ? (
-                <span className="text-slate-500">Loading submission status…</span>
-              ) : submissionStatus?.submitted ? (
-                <span>
-                  <span className="font-semibold text-emerald-800">Attendance submitted</span>
-                  {submissionStatus.submittedAt ? (
-                    <span className="text-slate-600">
-                      {' '}
-                      · {new Date(submissionStatus.submittedAt).toLocaleString()}
-                    </span>
-                  ) : null}
-                </span>
-              ) : (
-                <span className="font-semibold text-amber-800">Attendance not submitted</span>
-              )}
-            </div>
-            <button
-              type="button"
-              disabled={finalizeBusy || submissionStatusLoading || !moduleId}
-              onClick={() => void onFinalizeAttendance()}
-              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:opacity-50"
-            >
-              {finalizeBusy
-                ? 'Saving…'
-                : submissionStatus?.submitted
-                  ? 'Update submission time'
-                  : 'Finalize attendance'}
-            </button>
-          </div>
-        )}
         {finalizeErr && (
           <p className="text-xs text-red-700" role="alert">
             {finalizeErr}
