@@ -39,42 +39,68 @@ export default function SessionAttendanceClient({
   onAfterSubmit?: () => void
 }) {
   const [rows, setRows] = useState<RosterRow[]>(() => normalizeRowsForEditing(initialRows))
+  const [modifiedRowIds, setModifiedRowIds] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     setRows(normalizeRowsForEditing(initialRows))
+    setModifiedRowIds(new Set())
   }, [moduleId, initialRows])
 
   const submittedOnce = rows.some((r) => r.roster_submitted_at != null)
 
   function togglePresent(rowId: string, next: boolean) {
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, is_present: next } : r)))
+    setModifiedRowIds((prev) => new Set([...prev, rowId]))
   }
 
   async function submitAttendance() {
+    if (modifiedRowIds.size === 0 && submittedOnce) {
+      toast.info('No changes to save.')
+      return
+    }
+
     setBusy(true)
     const supabase = createClient()
     const ts = new Date().toISOString()
 
-    for (const r of rows) {
-      const { error } = await supabase
-        .from('module_session_roster')
-        .update({
-          is_present: r.is_present,
-          last_marked_by: currentUserId,
-          updated_at: ts,
-          roster_submitted_at: ts,
-        })
-        .eq('id', r.id)
+    if (!moduleId?.trim()) {
+      toast.error('Missing session module. Reload the page and try again.')
+      setBusy(false)
+      return
+    }
 
-      if (error) {
-        toast.error(error.message)
-        setBusy(false)
-        return
-      }
+    const rowsToUpdate = rows
+      .filter((r) => modifiedRowIds.has(r.id) || !submittedOnce)
+      .map((r) => ({
+        id: r.id,
+        module_id: moduleId,
+        learner_id: r.learner_id,
+        is_present: r.is_present,
+        last_marked_by: currentUserId,
+        updated_at: ts,
+        roster_submitted_at: ts,
+      }))
+
+    if (rowsToUpdate.length === 0) {
+      setBusy(false)
+      return
+    }
+
+    // Bulk upsert: include module_id + learner_id so any INSERT path satisfies NOT NULL
+    // (upsert rows that only had id + flags could insert with null module_id).
+    const { error } = await supabase
+      .from('module_session_roster')
+      .upsert(rowsToUpdate, { onConflict: 'id' })
+
+    if (error) {
+      toast.error(error.message)
+      setBusy(false)
+      return
     }
 
     setRows((prev) => prev.map((r) => ({ ...r, roster_submitted_at: ts })))
+    setModifiedRowIds(new Set())
     toast.success('Attendance submitted.')
     setBusy(false)
     onAfterSubmit?.()

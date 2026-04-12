@@ -33,7 +33,7 @@ export default async function AttendanceReportPage() {
     <div className="space-y-6 p-2">
       <PageHeader
         title="Attendance report"
-        description="Filter attendance by course, session type, submission date, learner, and presence."
+        description="Browse live and offline sessions by course; open a session to page through attendance rows."
       />
       <AttendanceReportClient courses={(courses ?? []) as AttendanceReportCourseOption[]} />
     </div>

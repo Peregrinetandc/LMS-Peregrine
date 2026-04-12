@@ -19,15 +19,25 @@ export type AttendanceReportFilters = {
   presence: AttendancePresenceFilter
 }
 
-/** Pagination for roster query (default pageSize in client). */
-export type AttendanceReportPagination = {
+/** Pagination applies only to roster rows inside an opened session (server-side). */
+export type AttendanceModuleDetailPagination = {
   page: number
   pageSize: number
 }
 
-export type AttendanceReportFetchInput = {
-  filters: AttendanceReportFilters
-  pagination?: AttendanceReportPagination
+export type AttendanceSessionListItem = {
+  courseId: string
+  courseTitle: string
+  courseCode: string
+  moduleId: string
+  moduleTitle: string
+  moduleType: 'live_session' | 'offline_session'
+  weekIndex: number
+  sortOrder: number
+  submittedAt: string | null
+  total: number
+  present: number
+  absent: number
 }
 
 export type AttendanceReportRow = {
@@ -46,4 +56,3 @@ export type AttendanceReportRow = {
   rosterSubmittedAt: string | null
   updatedAt: string | null
 }
-

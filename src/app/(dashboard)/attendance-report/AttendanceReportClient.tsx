@@ -1,38 +1,88 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import {
-  fetchAttendanceModuleDetail,
-  fetchAttendanceReport,
-  type AttendanceSessionAggregate,
-} from './actions'
+import { useMemo, useState, useTransition, useRef } from 'react'
+import { fetchAttendanceModuleDetail, fetchAttendanceSessionList } from './actions'
 import type {
-  AttendancePresenceFilter,
-  AttendanceReportCourseOption,
   AttendanceReportFilters,
   AttendanceReportRow,
-  AttendanceSessionTypeFilter,
+  AttendanceReportCourseOption,
+  AttendanceSessionListItem,
 } from './types'
-
-type DetailPresenceFilter = 'all' | 'present' | 'absent'
-
-type ModuleSummary = {
-  key: string
-  courseTitle: string
-  courseCode: string
-  courseId: string
-  moduleId: string
-  moduleTitle: string
-  moduleType: 'live_session' | 'offline_session'
-  weekIndex: number
-  submittedAt: string | null
-  total: number
-  present: number
-  absent: number
-}
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 function formatType(t: string) {
   return t.replace('_', ' ')
+}
+
+function AttendanceDetailTable({ list }: { list: AttendanceReportRow[] }) {
+  const parentRef = useRef<HTMLDivElement>(null)
+
+  const rowVirtualizer = useVirtualizer({
+    count: list.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 45,
+    overscan: 10,
+  })
+
+  return (
+    <div
+      ref={parentRef}
+      className="overflow-auto max-h-[400px] rounded-xl border border-slate-200"
+    >
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        <div className="sticky top-0 z-10 flex border-b border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 shadow-sm">
+          <div className="flex-[2] p-3">Learner</div>
+          <div className="flex-1 p-3">Status</div>
+          <div className="flex-1 p-3">Updated</div>
+        </div>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const r = list[virtualRow.index]
+          return (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
+              className="absolute left-0 top-0 flex w-full border-b border-slate-100 bg-white text-sm hover:bg-slate-50/80"
+              style={{
+                transform: `translateY(${virtualRow.start}px)`,
+                marginTop: '45px',
+              }}
+            >
+              <div className="flex-[2] p-3 font-medium text-slate-900">
+                {r.learnerName ?? r.learnerId.slice(0, 8)}
+                {r.learnerName ? null : (
+                  <span className="ml-2 text-xs text-slate-500">(no name)</span>
+                )}
+              </div>
+              <div className="flex-1 p-3">
+                {r.isPresent ? (
+                  <span className="font-semibold text-emerald-700">Present</span>
+                ) : (
+                  <span className="font-semibold text-rose-700">Absent</span>
+                )}
+              </div>
+              <div className="flex-1 p-3 text-slate-600">
+                {r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '—'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+type CourseGroup = {
+  courseId: string
+  courseTitle: string
+  courseCode: string
+  sessions: AttendanceSessionListItem[]
 }
 
 export default function AttendanceReportClient({
@@ -49,150 +99,122 @@ export default function AttendanceReportClient({
     presence: 'all',
   })
 
-  const [rows, setRows] = useState<AttendanceReportRow[]>([])
+  const [sessions, setSessions] = useState<AttendanceSessionListItem[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const [pageSize, setPageSize] = useState(100)
-  const [totalCount, setTotalCount] = useState(0)
-  const [serverPage, setServerPage] = useState(1)
-  const [sessionAggregates, setSessionAggregates] = useState<Record<string, AttendanceSessionAggregate>>({})
-
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null)
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+  const [selectedSessionMeta, setSelectedSessionMeta] = useState<AttendanceSessionListItem | null>(null)
+
   const [moduleDetailRows, setModuleDetailRows] = useState<AttendanceReportRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
-  const [detailPresence, setDetailPresence] = useState<DetailPresenceFilter>('all')
-  const [detailLearnerSearch, setDetailLearnerSearch] = useState('')
+  const [detailPage, setDetailPage] = useState(1)
+  const [detailPageSize, setDetailPageSize] = useState(50)
+  const [detailTotalCount, setDetailTotalCount] = useState(0)
+
+  const detailFiltersRef = useRef(filters)
+  detailFiltersRef.current = filters
+
+  async function loadDetailPage(courseId: string, moduleId: string, page: number, pageSize: number) {
+    setDetailLoading(true)
+    setDetailError(null)
+    const res = await fetchAttendanceModuleDetail({
+      courseId,
+      moduleId,
+      filters: detailFiltersRef.current,
+      pagination: { page, pageSize },
+    })
+    setDetailLoading(false)
+    if ('error' in res) {
+      setDetailError(res.error)
+      setModuleDetailRows([])
+      setDetailTotalCount(0)
+      return
+    }
+    setModuleDetailRows(res.rows)
+    setDetailTotalCount(res.totalCount)
+    setDetailPage(res.page)
+    setDetailPageSize(res.pageSize)
+  }
 
   function resetDetailPanel() {
     setSelectedModuleId(null)
+    setSelectedCourseId(null)
+    setSelectedSessionMeta(null)
     setModuleDetailRows([])
     setDetailLoading(false)
     setDetailError(null)
-    setDetailPresence('all')
-    setDetailLearnerSearch('')
+    setDetailPage(1)
+    setDetailTotalCount(0)
   }
 
-  function openSessionDetail(courseId: string, moduleId: string) {
-    if (selectedModuleId === moduleId) {
+  function openSessionDetail(session: AttendanceSessionListItem) {
+    if (selectedModuleId === session.moduleId && selectedCourseId === session.courseId) {
       resetDetailPanel()
       return
     }
-    setDetailPresence('all')
-    setDetailLearnerSearch('')
-    setSelectedModuleId(moduleId)
-    setDetailLoading(true)
-    setDetailError(null)
+    setSelectedCourseId(session.courseId)
+    setSelectedModuleId(session.moduleId)
+    setSelectedSessionMeta(session)
     setModuleDetailRows([])
-    void (async () => {
-      const res = await fetchAttendanceModuleDetail({ courseId, moduleId })
-      setDetailLoading(false)
-      if ('error' in res) {
-        setDetailError(res.error)
-        setModuleDetailRows([])
-        return
-      }
-      setModuleDetailRows(res.rows)
-    })()
+    setDetailError(null)
+    void loadDetailPage(session.courseId, session.moduleId, 1, detailPageSize)
   }
 
   function updateFilter<K extends keyof AttendanceReportFilters>(key: K, value: AttendanceReportFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
-  function loadReport(nextPage: number, nextPageSize: number) {
+  function run() {
     setErr(null)
     startTransition(async () => {
-      const res = await fetchAttendanceReport({
-        filters,
-        pagination: { page: nextPage, pageSize: nextPageSize },
-      })
+      const res = await fetchAttendanceSessionList(filters)
       if ('error' in res) {
         setErr(res.error)
-        setRows([])
-        setTotalCount(0)
-        setServerPage(1)
-        setSessionAggregates({})
+        setSessions([])
         resetDetailPanel()
         return
       }
-      setRows(res.rows)
-      setTotalCount(res.totalCount)
-      setServerPage(res.page)
-      setPageSize(res.pageSize)
-      setSessionAggregates(res.sessionAggregates ?? {})
+      setSessions(res.sessions)
       resetDetailPanel()
     })
   }
 
-  function run() {
-    loadReport(1, pageSize)
-  }
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-
-  const moduleSummaries = useMemo(() => {
-    const seen = new Set<string>()
-    const list: ModuleSummary[] = []
-
-    for (const r of rows) {
-      const key = `${r.courseId}:${r.moduleId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-
-      const agg = sessionAggregates[key]
-      list.push({
-        key,
-        courseTitle: r.courseTitle,
-        courseCode: r.courseCode,
-        courseId: r.courseId,
-        moduleId: r.moduleId,
-        moduleTitle: r.moduleTitle,
-        moduleType: r.moduleType,
-        weekIndex: r.weekIndex,
-        submittedAt: agg?.submittedAt ?? null,
-        total: agg?.total ?? 0,
-        present: agg?.present ?? 0,
-        absent: agg?.absent ?? 0,
-      })
+  const groupedSessions = useMemo((): CourseGroup[] => {
+    if (sessions.length === 0) return []
+    if (filters.courseId !== 'all') {
+      const s0 = sessions[0]
+      return [
+        {
+          courseId: s0.courseId,
+          courseTitle: s0.courseTitle,
+          courseCode: s0.courseCode,
+          sessions,
+        },
+      ]
     }
-
-    return list.sort((a, b) => {
-      return (
-        a.courseTitle.localeCompare(b.courseTitle) ||
-        a.weekIndex - b.weekIndex ||
-        a.moduleTitle.localeCompare(b.moduleTitle)
-      )
-    })
-  }, [rows, sessionAggregates])
-
-  const detailStats = useMemo(() => {
-    const total = moduleDetailRows.length
-    const present = moduleDetailRows.reduce((n, r) => n + (r.isPresent ? 1 : 0), 0)
-    return { total, present, absent: total - present }
-  }, [moduleDetailRows])
-
-  const filteredDetailRows = useMemo(() => {
-    let list = moduleDetailRows
-    if (detailPresence === 'present') list = list.filter((r) => r.isPresent)
-    if (detailPresence === 'absent') list = list.filter((r) => !r.isPresent)
-    const q = detailLearnerSearch.trim().toLowerCase()
-    if (q) {
-      list = list.filter(
-        (r) =>
-          (r.learnerName ?? '').toLowerCase().includes(q) ||
-          r.learnerId.toLowerCase().includes(q),
-      )
+    const byCourse = new Map<string, CourseGroup>()
+    for (const s of sessions) {
+      const g = byCourse.get(s.courseId)
+      if (g) g.sessions.push(s)
+      else {
+        byCourse.set(s.courseId, {
+          courseId: s.courseId,
+          courseTitle: s.courseTitle,
+          courseCode: s.courseCode,
+          sessions: [s],
+        })
+      }
     }
-    return [...list].sort((a, b) => {
-      const an = (a.learnerName ?? '').toLowerCase()
-      const bn = (b.learnerName ?? '').toLowerCase()
-      return an.localeCompare(bn) || a.learnerId.localeCompare(b.learnerId)
-    })
-  }, [moduleDetailRows, detailPresence, detailLearnerSearch])
+    return [...byCourse.values()].sort((a, b) => a.courseTitle.localeCompare(b.courseTitle))
+  }, [sessions, filters.courseId])
 
   const detailHeader = moduleDetailRows[0]
+  const detailTotalPages = Math.max(1, Math.ceil(detailTotalCount / detailPageSize))
+  const detailFrom = detailTotalCount === 0 ? 0 : (detailPage - 1) * detailPageSize + 1
+  const detailTo = Math.min(detailPage * detailPageSize, detailTotalCount)
 
   return (
     <div className="space-y-6">
@@ -202,7 +224,7 @@ export default function AttendanceReportClient({
             <label className="mb-1 block text-sm font-medium text-slate-700">Course</label>
             <select
               value={filters.courseId}
-              onChange={(e) => updateFilter('courseId', (e.target.value || 'all') as any)}
+              onChange={(e) => updateFilter('courseId', (e.target.value || 'all') as AttendanceReportFilters['courseId'])}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             >
               <option value="all">All courses</option>
@@ -218,11 +240,13 @@ export default function AttendanceReportClient({
             <label className="mb-1 block text-sm font-medium text-slate-700">Session type</label>
             <select
               value={filters.sessionType}
-              onChange={(e) => updateFilter('sessionType', (e.target.value || 'all') as AttendanceSessionTypeFilter)}
+              onChange={(e) =>
+                updateFilter('sessionType', (e.target.value || 'all') as AttendanceReportFilters['sessionType'])
+              }
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             >
               <option value="all">All</option>
-              <option value="live_session">Live session</option>
+              <option value="live_session">Online (live session)</option>
               <option value="offline_session">Offline session</option>
             </select>
           </div>
@@ -231,7 +255,9 @@ export default function AttendanceReportClient({
             <label className="mb-1 block text-sm font-medium text-slate-700">Presence</label>
             <select
               value={filters.presence}
-              onChange={(e) => updateFilter('presence', (e.target.value || 'all') as AttendancePresenceFilter)}
+              onChange={(e) =>
+                updateFilter('presence', (e.target.value || 'all') as AttendanceReportFilters['presence'])
+              }
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             >
               <option value="all">All</option>
@@ -266,29 +292,9 @@ export default function AttendanceReportClient({
               type="text"
               value={filters.learnerQuery}
               onChange={(e) => updateFilter('learnerQuery', e.target.value)}
-              placeholder="Type a learner name…"
+              placeholder="Filter by learner name…"
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
             />
-          </div>
-
-          <div className="min-w-[120px]">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Per page</label>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                const next = Number(e.target.value)
-                setPageSize(next)
-                if (totalCount > 0) loadReport(1, next)
-              }}
-              disabled={isPending}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-60"
-            >
-              {[25, 50, 100, 200].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="flex items-center gap-2">
@@ -310,139 +316,142 @@ export default function AttendanceReportClient({
         )}
 
         <p className="mt-3 text-xs text-slate-500">
-          Data loads in pages (max 200 rows per request). Date filters use attendance submission time. Session rows
-          list modules that appear on this page; Present / Absent / Total are full counts for each session (all
-          matching learners), not just the current page.
+          Sessions are listed by course and type (online = live session, offline = offline session). Counts respect
+          your filters. Open a session to page through attendance rows for that session only. Date filters use
+          roster submission time.
         </p>
 
-        {totalCount > 0 && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-slate-800">{totalCount.toLocaleString()}</span> row
-              {totalCount === 1 ? '' : 's'} total · page{' '}
-              <span className="font-medium text-slate-800">{serverPage}</span> of{' '}
-              <span className="font-medium text-slate-800">{totalPages}</span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={isPending || serverPage <= 1}
-                onClick={() => loadReport(serverPage - 1, pageSize)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                disabled={isPending || serverPage >= totalPages}
-                onClick={() => loadReport(serverPage + 1, pageSize)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+        {!isPending && sessions.length > 0 && (
+          <p className="mt-2 text-sm text-slate-600">
+            <span className="font-medium text-slate-800">{sessions.length}</span> matching session
+            {sessions.length === 1 ? '' : 's'}
+          </p>
         )}
       </section>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Sessions on this page</h2>
-          <p className="text-sm text-slate-600">
-            {moduleSummaries.length} session{moduleSummaries.length === 1 ? '' : 's'}
-          </p>
+          <h2 className="text-base font-semibold text-slate-900">Sessions</h2>
         </div>
 
-        {moduleSummaries.length === 0 ? (
+        {sessions.length === 0 && !isPending && !err ? (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-sm text-slate-500">
-            No attendance records match your filters yet.
+            Load a report to see live and offline sessions for your selection.
           </div>
-        ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-100 text-left text-slate-600">
-                  <th className="p-3 font-medium">Course</th>
-                  <th className="p-3 font-medium">Session</th>
-                  <th className="p-3 font-medium">Type</th>
-                  <th className="p-3 font-medium">Week</th>
-                  <th className="p-3 font-medium">Submitted</th>
-                  <th className="p-3 font-medium text-right">Present</th>
-                  <th className="p-3 font-medium text-right">Absent</th>
-                  <th className="p-3 font-medium text-right">Total</th>
-                  <th className="p-3 w-36 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {moduleSummaries.map((m) => {
-                  const active = selectedModuleId === m.moduleId
-                  return (
-                    <tr
-                      key={m.key}
-                      className={`border-b border-slate-100 hover:bg-slate-50/80 ${
-                        active ? 'bg-blue-50/60' : ''
-                      }`}
-                    >
-                      <td className="p-3 text-slate-800">
-                        <span className="font-medium">{m.courseTitle}</span>
-                        <span className="block text-xs text-slate-500">{m.courseCode}</span>
-                      </td>
-                      <td className="p-3 font-medium text-slate-800">{m.moduleTitle}</td>
-                      <td className="p-3 capitalize text-slate-600">{formatType(m.moduleType)}</td>
-                      <td className="p-3 text-slate-600">{m.weekIndex}</td>
-                      <td className="p-3 text-slate-600">
-                        {m.submittedAt ? new Date(m.submittedAt).toLocaleString() : '—'}
-                      </td>
-                      <td className="p-3 text-right font-semibold text-emerald-700">{m.present}</td>
-                      <td className="p-3 text-right font-semibold text-rose-700">{m.absent}</td>
-                      <td className="p-3 text-right font-semibold text-slate-800">{m.total}</td>
-                      <td className="p-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => openSessionDetail(m.courseId, m.moduleId)}
-                          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                            active
-                              ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
-                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
-                          title={
-                            active
-                              ? 'Hide roster for this session'
-                              : 'View full roster (present / absent) for this session'
-                          }
-                        >
-                          {active ? 'Hide' : 'View details'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        ) : null}
+
+        {sessions.length === 0 && isPending ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-sm text-slate-500">
+            Loading…
           </div>
-        )}
+        ) : null}
+
+        {sessions.length > 0 ? (
+          <div className="space-y-8">
+            {groupedSessions.map((group) => (
+              <div key={group.courseId} className="space-y-2">
+                {filters.courseId === 'all' ? (
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    {group.courseTitle}
+                    <span className="ml-2 font-normal text-slate-500">({group.courseCode})</span>
+                  </h3>
+                ) : null}
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-100 text-left text-slate-600">
+                        {filters.courseId !== 'all' ? <th className="p-3 font-medium">Course</th> : null}
+                        <th className="p-3 font-medium">Session</th>
+                        <th className="p-3 font-medium">Type</th>
+                        <th className="p-3 font-medium">Week</th>
+                        <th className="p-3 font-medium">Submitted</th>
+                        <th className="p-3 font-medium text-right">Present</th>
+                        <th className="p-3 font-medium text-right">Absent</th>
+                        <th className="p-3 font-medium text-right">Total</th>
+                        <th className="p-3 w-36 font-medium text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.sessions.map((m) => {
+                        const active =
+                          selectedModuleId === m.moduleId && selectedCourseId === m.courseId
+                        return (
+                          <tr
+                            key={`${m.courseId}:${m.moduleId}`}
+                            className={`border-b border-slate-100 hover:bg-slate-50/80 ${
+                              active ? 'bg-blue-50/60' : ''
+                            }`}
+                          >
+                            {filters.courseId !== 'all' ? (
+                              <td className="p-3 text-slate-800">
+                                <span className="font-medium">{m.courseTitle}</span>
+                                <span className="block text-xs text-slate-500">{m.courseCode}</span>
+                              </td>
+                            ) : null}
+                            <td className="p-3 font-medium text-slate-800">{m.moduleTitle}</td>
+                            <td className="p-3 capitalize text-slate-600">{formatType(m.moduleType)}</td>
+                            <td className="p-3 text-slate-600">{m.weekIndex}</td>
+                            <td className="p-3 text-slate-600">
+                              {m.submittedAt ? new Date(m.submittedAt).toLocaleString() : '—'}
+                            </td>
+                            <td className="p-3 text-right font-semibold text-emerald-700">{m.present}</td>
+                            <td className="p-3 text-right font-semibold text-rose-700">{m.absent}</td>
+                            <td className="p-3 text-right font-semibold text-slate-800">{m.total}</td>
+                            <td className="p-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => openSessionDetail(m)}
+                                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                                  active
+                                    ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
+                                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                }`}
+                                title={
+                                  active
+                                    ? 'Hide roster for this session'
+                                    : 'View attendance for this session (paged)'
+                                }
+                              >
+                                {active ? 'Hide' : 'View details'}
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
-      {selectedModuleId && (
+      {selectedModuleId && selectedCourseId && (
         <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">Session Attendance</h2>
+              <h2 className="text-base font-semibold text-slate-900">Session attendance</h2>
               {detailHeader ? (
                 <p className="mt-0.5 text-sm text-slate-600">
                   {detailHeader.courseTitle} · Week {detailHeader.weekIndex} · {detailHeader.moduleTitle}
                 </p>
+              ) : selectedSessionMeta ? (
+                <p className="mt-0.5 text-sm text-slate-600">
+                  {selectedSessionMeta.courseTitle} · Week {selectedSessionMeta.weekIndex} ·{' '}
+                  {selectedSessionMeta.moduleTitle}
+                </p>
               ) : null}
-              {!detailLoading && !detailError && moduleDetailRows.length > 0 && (
+              {selectedSessionMeta && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                    Total {detailStats.total}
+                    Total {selectedSessionMeta.total}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                    Present {detailStats.present}
+                    Present {selectedSessionMeta.present}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
-                    Absent {detailStats.absent}
+                    Absent {selectedSessionMeta.absent}
                   </span>
                 </div>
               )}
@@ -456,99 +465,86 @@ export default function AttendanceReportClient({
             </button>
           </div>
 
-          {detailLoading && (
-            <p className="text-sm text-slate-500">Loading session attendance…</p>
-          )}
+          {detailLoading && <p className="text-sm text-slate-500">Loading attendance…</p>}
           {detailError && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
               {detailError}
             </div>
           )}
 
-          {!detailLoading && !detailError && moduleDetailRows.length > 0 && (
+          {!detailLoading && !detailError && detailTotalCount > 0 && (
             <>
               <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[160px]">
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Show</label>
+                <div className="min-w-[120px]">
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Rows per page</label>
                   <select
-                    value={detailPresence}
-                    onChange={(e) => setDetailPresence((e.target.value || 'all') as DetailPresenceFilter)}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    value={detailPageSize}
+                    onChange={(e) => {
+                      const next = Number(e.target.value)
+                      if (!selectedCourseId || !selectedModuleId) return
+                      void loadDetailPage(selectedCourseId, selectedModuleId, 1, next)
+                    }}
+                    disabled={detailLoading}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-60"
                   >
-                    <option value="all">All learners</option>
-                    <option value="present">Present only</option>
-                    <option value="absent">Absent only</option>
+                    {[25, 50, 100, 200].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
                   </select>
-                </div>
-                <div className="min-w-[200px] flex-1">
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Search learner</label>
-                  <input
-                    type="text"
-                    value={detailLearnerSearch}
-                    onChange={(e) => setDetailLearnerSearch(e.target.value)}
-                    placeholder="Filter by name…"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
-                  />
                 </div>
               </div>
               <p className="text-sm text-slate-600">
-                Showing{' '}
-                <span className="font-medium text-slate-900">{filteredDetailRows.length}</span> of{' '}
-                {moduleDetailRows.length} enrolled
+                Rows <span className="font-medium text-slate-900">{detailFrom}</span>–
+                <span className="font-medium text-slate-900">{detailTo}</span> of{' '}
+                <span className="font-medium text-slate-900">{detailTotalCount}</span> (matching filters)
               </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={detailLoading || detailPage <= 1 || !selectedCourseId || !selectedModuleId}
+                  onClick={() => {
+                    if (!selectedCourseId || !selectedModuleId) return
+                    void loadDetailPage(selectedCourseId, selectedModuleId, detailPage - 1, detailPageSize)
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    detailLoading ||
+                    detailPage >= detailTotalPages ||
+                    !selectedCourseId ||
+                    !selectedModuleId
+                  }
+                  onClick={() => {
+                    if (!selectedCourseId || !selectedModuleId) return
+                    void loadDetailPage(selectedCourseId, selectedModuleId, detailPage + 1, detailPageSize)
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+                <span className="text-sm text-slate-600">
+                  Page <span className="font-medium text-slate-800">{detailPage}</span> of{' '}
+                  <span className="font-medium text-slate-800">{detailTotalPages}</span>
+                </span>
+              </div>
             </>
           )}
 
           {!detailLoading && !detailError && moduleDetailRows.length > 0 && (
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
-                    <th className="p-3 font-medium">Learner</th>
-                    <th className="p-3 font-medium">Status</th>
-                    <th className="p-3 font-medium">Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDetailRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="p-6 text-center text-slate-500">
-                        No learners match this filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredDetailRows.map((r) => (
-                      <tr key={r.rosterRowId} className="border-b border-slate-100">
-                        <td className="p-3 font-medium text-slate-900">
-                          {r.learnerName ?? r.learnerId.slice(0, 8)}
-                          {r.learnerName ? null : (
-                            <span className="ml-2 text-xs text-slate-500">(no name)</span>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          {r.isPresent ? (
-                            <span className="font-semibold text-emerald-700">Present</span>
-                          ) : (
-                            <span className="font-semibold text-rose-700">Absent</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-slate-600">
-                          {r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '—'}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <AttendanceDetailTable list={moduleDetailRows} />
           )}
 
-          {!detailLoading && !detailError && moduleDetailRows.length === 0 && (
-            <p className="text-sm text-slate-500">No session attendance for this session yet.</p>
+          {!detailLoading && !detailError && detailTotalCount === 0 && (
+            <p className="text-sm text-slate-500">No attendance rows match the current filters for this session.</p>
           )}
         </section>
       )}
     </div>
   )
 }
-

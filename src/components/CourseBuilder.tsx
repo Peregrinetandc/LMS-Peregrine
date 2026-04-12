@@ -42,7 +42,7 @@ import {
   toDatetimeLocalValue,
   unlockAtForWeek,
 } from '@/lib/unlock-schedule'
-import { syncQuizAndExternalForModule } from '@/lib/sync-module-quiz-external'
+import { syncQuizAndExternalForModules } from '@/lib/sync-module-quiz-external'
 import { parseQuizCsv } from '@/lib/parse-quiz-csv'
 import { toRenderableImageUrl } from '@/lib/drive-image'
 import { ROLES } from '@/lib/roles'
@@ -194,6 +194,7 @@ async function syncAssignmentForModule(
     return
   }
   const payload = {
+    module_id: moduleId,
     description: mod.assignment_description.trim() || null,
     max_score: mod.max_score,
     passing_score: mod.passing_score,
@@ -201,16 +202,10 @@ async function syncAssignmentForModule(
     allow_late: false,
     late_penalty_pct: 0,
   }
-  const { data: existing } = await supabase
+  const { error } = await supabase
     .from('assignments')
-    .select('id')
-    .eq('module_id', moduleId)
-    .maybeSingle()
-  if (existing) {
-    await supabase.from('assignments').update(payload).eq('id', existing.id)
-  } else {
-    await supabase.from('assignments').insert({ module_id: moduleId, ...payload })
-  }
+    .upsert(payload, { onConflict: 'module_id' })
+  if (error) throw error
 }
 
 const makeModule = (weekIndex = 1): ModuleItem => ({
@@ -478,6 +473,9 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
   const [modules, setModules] = useState<ModuleItem[]>([makeModule()])
   const [activeId, setActiveId] = useState<string>(modules[0]?.id ?? '')
 
+  const [modifiedModuleIds, setModifiedModuleIds] = useState<Set<string>>(new Set())
+  const [deletedModuleIds, setDeletedModuleIds] = useState<Set<string>>(new Set())
+
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   /** Validation only (title / course code); shown above the form */
@@ -728,6 +726,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         m.id === activeIdStr ? { ...m, week_index: destinationWeek } : m,
       )
       setModules(next)
+      setModifiedModuleIds((prev) => new Set([...prev, activeIdStr]))
     }
   }
 
@@ -736,10 +735,20 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     const m = makeModule(newWeek)
     setModules((prev) => [...prev, m])
     setActiveId(m.id)
+    setModifiedModuleIds((prev) => new Set([...prev, m.id]))
   }
 
   const removeModule = (id: string) => {
+    const mod = modules.find((m) => m.id === id)
+    if (mod?.dbId) {
+      setDeletedModuleIds((prev) => new Set([...prev, mod.dbId!]))
+    }
     setModules((prev) => prev.filter((m) => m.id !== id))
+    setModifiedModuleIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   const copyModuleToClipboard = async (mod: ModuleItem, e: React.MouseEvent) => {
@@ -781,6 +790,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     setModules((prev) =>
       prev.map((m) => (m.id === activeId ? { ...m, ...patch } : m))
     )
+    setModifiedModuleIds((prev) => new Set([...prev, activeId]))
   }
 
   function patchActiveQuiz(
@@ -789,6 +799,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     setModules((prev) =>
       prev.map((m) => (m.id === activeId ? { ...m, quiz_questions: patchFn(m.quiz_questions) } : m)),
     )
+    setModifiedModuleIds((prev) => new Set([...prev, activeId]))
   }
 
   function addQuizQuestion() {
@@ -884,6 +895,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         m.id === activeId ? { ...m, external_links: patchFn(m.external_links) } : m,
       ),
     )
+    setModifiedModuleIds((prev) => new Set([...prev, activeId]))
   }
 
   function addExternalLinkRow() {
@@ -951,6 +963,20 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       return
     }
 
+    // Capture state for potential rollback
+    const backupState = {
+      modules: [...modules],
+      modifiedModuleIds: new Set(modifiedModuleIds),
+      deletedModuleIds: new Set(deletedModuleIds),
+      title,
+      courseCode,
+      description,
+      courseStartsAt,
+      thumbnailUrl,
+      enrollmentType,
+      selectedInstructorId,
+    }
+
     try {
       const startsAtIso = fromDatetimeLocal(courseStartsAt)
 
@@ -981,14 +1007,9 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
           .select('id')
           .eq('course_id', courseId)
 
-        const keepIds = new Set(
-          modules.map((m) => m.dbId).filter(Boolean) as string[]
-        )
-        const toRemove = (existingMods ?? [])
-          .map((r) => r.id)
-          .filter((id) => !keepIds.has(id))
-        if (toRemove.length > 0) {
-          await supabase.from('modules').delete().in('id', toRemove)
+        // Delete modules that were explicitly removed
+        if (deletedModuleIds.size > 0) {
+          await supabase.from('modules').delete().in('id', Array.from(deletedModuleIds))
         }
 
         let { data: sectionRow } = await supabase
@@ -1009,32 +1030,44 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         }
 
         const sectionId = sectionRow?.id ?? null
+        const modulesToSync: Array<{
+          moduleId: string
+          moduleType: string
+          externalLinks: ModuleItem['external_links']
+          quizQuestions: ModuleItem['quiz_questions']
+        }> = []
 
+        // Only process modules that were modified or are new
         for (let i = 0; i < modules.length; i++) {
           const mod = modules[i]
           const row = buildModuleRow(mod, courseId, sectionId, i, courseStartsAt)
 
           if (mod.dbId) {
-            const { error: mErr } = await supabase
-              .from('modules')
-              .update(row)
-              .eq('id', mod.dbId)
-            if (mErr) {
-              logSaveFailure('module update', mErr)
-              setActionError('Something went wrong.')
-              return
+            // Check if it's actually modified
+            if (modifiedModuleIds.has(mod.id)) {
+              const { error: mErr } = await supabase
+                .from('modules')
+                .update(row)
+                .eq('id', mod.dbId)
+              if (mErr) {
+                logSaveFailure('module update', mErr)
+                throw new Error('Failed to update lesson.')
+              }
+              await syncAssignmentForModule(supabase, mod, mod.dbId)
+              modulesToSync.push({
+                moduleId: mod.dbId,
+                moduleType: mod.type,
+                externalLinks: mod.external_links,
+                quizQuestions: mod.quiz_questions,
+              })
+            } else {
+              // Just update sort_order if it's not "dirty" but position might have changed
+              const { error: sErr } = await supabase.from('modules').update({ sort_order: i }).eq('id', mod.dbId)
+              if (sErr) {
+                logSaveFailure('module sort_order update', sErr)
+                throw new Error('Failed to update lesson order.')
+              }
             }
-            await syncAssignmentForModule(supabase, mod, mod.dbId)
-            await syncQuizAndExternalForModule(
-              supabase,
-              mod.dbId,
-              mod.type,
-              mod.external_links.map(({ label, url }) => ({ label, url })),
-              mod.quiz_questions.map((q) => ({
-                prompt: q.prompt,
-                options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
-              })),
-            )
           } else {
             const { data: dbMod, error: insErr } = await supabase
               .from('modules')
@@ -1043,23 +1076,38 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
               .single()
             if (insErr || !dbMod) {
               logSaveFailure('module insert', insErr ?? new Error('no row'))
-              setActionError('Something went wrong.')
-              return
+              throw new Error('Failed to create new lesson.')
             }
+            // Update the local module with the new dbId to prevent duplicate inserts on next save
+            mod.dbId = dbMod.id
             await syncAssignmentForModule(supabase, mod, dbMod.id)
-            await syncQuizAndExternalForModule(
-              supabase,
-              dbMod.id,
-              mod.type,
-              mod.external_links.map(({ label, url }) => ({ label, url })),
-              mod.quiz_questions.map((q) => ({
-                prompt: q.prompt,
-                options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
-              })),
-            )
+            modulesToSync.push({
+              moduleId: dbMod.id,
+              moduleType: mod.type,
+              externalLinks: mod.external_links,
+              quizQuestions: mod.quiz_questions,
+            })
           }
         }
 
+        // Perform batch sync for all modified/new modules
+        if (modulesToSync.length > 0) {
+          await syncQuizAndExternalForModules(
+            supabase,
+            modulesToSync.map(m => ({
+              moduleId: m.moduleId,
+              moduleType: m.moduleType,
+              externalLinks: m.externalLinks.map(({ label, url }) => ({ label, url })),
+              quizQuestions: m.quizQuestions.map((q) => ({
+                prompt: q.prompt,
+                options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
+              })),
+            }))
+          )
+        }
+
+        setModifiedModuleIds(new Set())
+        setDeletedModuleIds(new Set())
         setBaselineSnapshot(snapshot)
         setSaved(true)
         setTimeout(() => router.push(`/courses/${courseId}`), 800)
@@ -1085,8 +1133,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
 
       if (courseErr || !course) {
         logSaveFailure('course insert', courseErr ?? new Error('no row'))
-        setActionError('Something went wrong.')
-        return
+        throw new Error('Failed to create course metadata.')
       }
 
       const { data: section } = await supabase
@@ -1094,6 +1141,13 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         .insert({ course_id: course.id, title: 'Course Content', sort_order: 0 })
         .select('id')
         .single()
+
+      const modulesToSync: Array<{
+        moduleId: string
+        moduleType: string
+        externalLinks: ModuleItem['external_links']
+        quizQuestions: ModuleItem['quiz_questions']
+      }> = []
 
       for (let i = 0; i < modules.length; i++) {
         const mod = modules[i]
@@ -1106,28 +1160,54 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
 
         if (mErr || !dbMod) {
           logSaveFailure('module insert (new course)', mErr ?? new Error('no row'))
-          setActionError('Something went wrong.')
-          return
+          throw new Error('Failed to create lesson for the new course.')
         }
+        mod.dbId = dbMod.id
         await syncAssignmentForModule(supabase, mod, dbMod.id)
-        await syncQuizAndExternalForModule(
+        modulesToSync.push({
+          moduleId: dbMod.id,
+          moduleType: mod.type,
+          externalLinks: mod.external_links,
+          quizQuestions: mod.quiz_questions,
+        })
+      }
+
+      if (modulesToSync.length > 0) {
+        await syncQuizAndExternalForModules(
           supabase,
-          dbMod.id,
-          mod.type,
-          mod.external_links.map(({ label, url }) => ({ label, url })),
-          mod.quiz_questions.map((q) => ({
-            prompt: q.prompt,
-            options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
-          })),
+          modulesToSync.map(m => ({
+            moduleId: m.moduleId,
+            moduleType: m.moduleType,
+            externalLinks: m.externalLinks.map(({ label, url }) => ({ label, url })),
+            quizQuestions: m.quizQuestions.map((q) => ({
+              prompt: q.prompt,
+              options: q.options.map((o) => ({ label: o.label, is_correct: o.is_correct })),
+            })),
+          }))
         )
       }
 
+      setModifiedModuleIds(new Set())
+      setDeletedModuleIds(new Set())
       setBaselineSnapshot(snapshot)
       setSaved(true)
       setTimeout(() => router.push(`/courses/${course.id}`), 1200)
     } catch (e: unknown) {
       logSaveFailure('save (exception)', e)
-      setActionError('Something went wrong.')
+      setActionError('Something went wrong. Changes could not be saved.')
+      
+      // Rollback to backup state
+      setModules(backupState.modules)
+      setModifiedModuleIds(backupState.modifiedModuleIds)
+      setDeletedModuleIds(backupState.deletedModuleIds)
+      setTitle(backupState.title)
+      setCourseCode(backupState.courseCode)
+      setDescription(backupState.description)
+      setCourseStartsAt(backupState.courseStartsAt)
+      setThumbnailUrl(backupState.thumbnailUrl)
+      setEnrollmentType(backupState.enrollmentType)
+      setSelectedInstructorId(backupState.selectedInstructorId)
+      
     } finally {
       setSaving(false)
     }

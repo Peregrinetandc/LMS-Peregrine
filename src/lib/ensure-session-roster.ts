@@ -6,6 +6,10 @@ export async function ensureSessionRosterRows(
   moduleId: string,
   courseId: string,
 ): Promise<{ error?: string }> {
+  if (!moduleId?.trim() || !courseId?.trim()) {
+    return { error: 'Missing course or session module.' }
+  }
+
   const { data: ens, error: ensErr } = await supabase
     .from('enrollments')
     .select('learner_id')
