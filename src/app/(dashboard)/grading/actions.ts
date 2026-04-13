@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { ROLES, isStaffRole } from '@/lib/roles'
+import { firstEmbeddedAssignment } from '@/lib/embedded-assignment'
 import { revalidatePath } from 'next/cache'
 
 const SUPABASE_IN_CHUNK = 40
@@ -110,8 +111,10 @@ export async function fetchGradingData(filters: GradingFilters, pagination: Grad
       .select('assignments(id)')
       .eq('course_id', filters.courseId)
     const assignmentIds = (courseAssignments ?? [])
-      .flatMap(m => (m as any).assignments ?? [])
-      .map((a: any) => a.id)
+      .flatMap((m) => {
+        const row = firstEmbeddedAssignment((m as { assignments?: unknown }).assignments)
+        return row ? [row.id] : []
+      })
     subsQuery = subsQuery.in('assignment_id', assignmentIds)
   } else if (allowedCourseIds) {
     // Restrict to instructor courses
@@ -119,8 +122,10 @@ export async function fetchGradingData(filters: GradingFilters, pagination: Grad
       .select('assignments(id)')
       .in('course_id', allowedCourseIds)
     const assignmentIds = (instructorAssignments ?? [])
-      .flatMap(m => (m as any).assignments ?? [])
-      .map((a: any) => a.id)
+      .flatMap((m) => {
+        const row = firstEmbeddedAssignment((m as { assignments?: unknown }).assignments)
+        return row ? [row.id] : []
+      })
     subsQuery = subsQuery.in('assignment_id', assignmentIds)
   }
 

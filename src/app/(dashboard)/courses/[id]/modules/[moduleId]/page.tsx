@@ -12,6 +12,7 @@ import ExternalResourceLinks from '@/components/ExternalResourceLinks'
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, MapPin } from 'lucide-react'
 import NextLessonButton from './NextLessonButton'
 import { ROLES } from '@/lib/roles'
+import { firstEmbeddedAssignment } from '@/lib/embedded-assignment'
 
 function sortNested<T extends { sort_order?: number }>(arr: T[] | null | undefined): T[] {
   return [...(arr ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -64,6 +65,16 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
     .single()
 
   if (!mod) notFound()
+
+  let assignmentRow = firstEmbeddedAssignment(mod.assignments)
+  if (mod.type === 'assignment' && !assignmentRow) {
+    const { data: asn } = await supabase
+      .from('assignments')
+      .select('id, description, max_score, passing_score, deadline_at, allow_late')
+      .eq('module_id', moduleId)
+      .maybeSingle()
+    assignmentRow = firstEmbeddedAssignment(asn)
+  }
 
   const passingPct =
     typeof mod.quiz_passing_pct === 'number'
@@ -164,7 +175,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
       sessionAttendanceMarked = progressCompleted
     }
     if (mod.type === 'assignment') {
-      const assignmentId = (mod.assignments as { id: string }[] | null)?.[0]?.id
+      const assignmentId = assignmentRow?.id
       if (assignmentId) {
         const { data: sub } = await supabase
           .from('submissions')
@@ -266,7 +277,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {mod.type === 'assignment' && (mod.assignments as { id: string }[] | null)?.[0] && (
+      {mod.type === 'assignment' && assignmentRow && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="lg:text-lg text-base font-bold text-slate-900">{mod.title}</h2>
@@ -274,34 +285,34 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               Assignment
             </span>
           </div>
-          {(mod.assignments as { description?: string }[])[0].description && (
+          {assignmentRow.description && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm whitespace-pre-wrap text-slate-700">
-              {(mod.assignments as { description?: string }[])[0].description}
+              {assignmentRow.description}
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Max score</p>
               <p className="mt-1 text-lg font-bold text-slate-900">
-                {(mod.assignments as { max_score: number }[])[0].max_score}
+                {assignmentRow.max_score ?? '—'}
               </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Passing score</p>
               <p className="mt-1 text-lg font-bold text-slate-900">
-                {(mod.assignments as { passing_score: number }[])[0].passing_score}
+                {assignmentRow.passing_score ?? '—'}
               </p>
             </div>
           </div>
-          {(mod.assignments as { deadline_at?: string }[])[0].deadline_at && (
+          {assignmentRow.deadline_at && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Deadline</p>
               <p className="mt-1 font-medium">
-                {new Date((mod.assignments as { deadline_at: string }[])[0].deadline_at).toLocaleString()}
+                {new Date(assignmentRow.deadline_at).toLocaleString()}
               </p>
             </div>
           )}
-          <AssignmentUpload assignmentId={(mod.assignments as { id: string }[])[0].id} />
+          <AssignmentUpload assignmentId={assignmentRow.id} />
         </div>
       )}
 

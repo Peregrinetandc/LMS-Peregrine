@@ -48,6 +48,7 @@ import { toRenderableImageUrl } from '@/lib/drive-image'
 import { ROLES } from '@/lib/roles'
 import { toast } from 'sonner'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
+import { firstEmbeddedAssignment } from '@/lib/embedded-assignment'
 
 type ModuleType =
   | 'video'
@@ -193,11 +194,13 @@ async function syncAssignmentForModule(
     await supabase.from('assignments').delete().eq('module_id', moduleId)
     return
   }
+  const maxScore = Math.min(10_000, Math.max(0, Math.trunc(Number(mod.max_score)) || 100))
+  const passingScore = Math.min(maxScore, Math.max(0, Math.trunc(Number(mod.passing_score)) || 60))
   const payload = {
     module_id: moduleId,
     description: mod.assignment_description.trim() || null,
-    max_score: mod.max_score,
-    passing_score: mod.passing_score,
+    max_score: maxScore,
+    passing_score: passingScore,
     deadline_at: mod.deadline_at ? fromDatetimeLocal(mod.deadline_at) : null,
     allow_late: false,
     late_penalty_pct: 0,
@@ -396,10 +399,7 @@ function mapDbModuleToItem(
   courseStartsIso: string | null
 ): ModuleItem {
   const id = row.id as string
-  const asnList = row.assignments as
-    | { id: string; description: string | null; max_score: number; passing_score: number; deadline_at: string | null }[]
-    | null
-  const asn = Array.isArray(asnList) && asnList.length > 0 ? asnList[0] : null
+  const asn = firstEmbeddedAssignment(row.assignments)
   const weekIndex = (row.week_index as number) ?? 1
   const avail = row.available_from as string | null | undefined
   const unlockMode = deriveUnlockMode(courseStartsIso, weekIndex, avail ?? null)
@@ -1074,7 +1074,6 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                 logSaveFailure('module update', mErr)
                 throw new Error('Failed to update lesson.')
               }
-              await syncAssignmentForModule(supabase, mod, mod.dbId)
               modulesToSync.push({
                 moduleId: mod.dbId,
                 moduleType: mod.type,
@@ -1089,6 +1088,9 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                 throw new Error('Failed to update lesson order.')
               }
             }
+            // Always sync assignment row for persisted modules (not only when modifiedModuleIds fired).
+            // Otherwise assignment-only edits can be skipped if dirty tracking misses the lesson id.
+            await syncAssignmentForModule(supabase, mod, mod.dbId)
           } else {
             const { data: dbMod, error: insErr } = await supabase
               .from('modules')
