@@ -37,6 +37,9 @@ type ApiSubmission = {
   passingScore: number | null
 } | null
 
+const IS_ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+const ANDROID_WARN_BYTES = 50 * 1024 * 1024 // 50 MB
+
 /** Long duration so small-phone / WebView users can read the real server or network message. */
 const UPLOAD_ISSUE_TOAST_MS = 18_000
 
@@ -122,14 +125,14 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
   /** Pass a snapshot `Array.from(input.files)` so the list survives input reset after await. */
   async function handleAddFiles(picked: File[]) {
     if (!picked.length) return
-    
-    setUploading(true)  
+  
+    setUploading(true)
     setErrorMsg('')
-    
+  
     try {
       const supabase = createClient()
       const { data, error: authError } = await supabase.auth.getUser()
-      
+  
       if (authError || !data?.user) {
         reportIssue('Assignment upload', 'You must be signed in.')
         return
@@ -142,33 +145,50 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
   
       for (const file of picked) {
         if (file.size > MAX_FILE_BYTES) {
-          reportIssue('Assignment upload', `"${file.name}" is too large.`)
+          reportIssue('Assignment upload', `"${file.name}" is too large (max ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB).`)
           return
         }
         if (!isAllowedAssignmentMime(file.type, file.name)) {
-          reportIssue('Assignment upload', `"${file.name}" is not an allowed type.`)
+          reportIssue(
+            'Assignment upload',
+            `"${file.name}" is not an allowed type (PDF, Word, Excel, CSV, images, or MP4).` +
+            (!file.type ? ' Your device did not report a file type — try picking from the Files app.' : ` (detected: ${file.type})`)
+          )
+          return
+        }
+        if (IS_ANDROID && file.size > ANDROID_WARN_BYTES) {
+          reportIssue(
+            'File too large for mobile',
+            `"${file.name}" is ${Math.round(file.size / (1024 * 1024))} MB. Please keep files under 50 MB on mobile, or upload from a desktop browser.`
+          )
           return
         }
       }
   
       for (const file of picked) {
-        const formData = new FormData()
-        formData.set('file', file)
-        formData.set('assignmentId', assignmentId)
-        
-        const res = await fetch('/api/assignments/upload', { method: 'POST', body: formData })
+        // Stream the file directly — avoids loading entire file into JS heap (fixes Android OOM)
+        const res = await fetch(
+          `/api/assignments/upload?assignmentId=${encodeURIComponent(assignmentId)}&fileName=${encodeURIComponent(file.name)}&mimeType=${encodeURIComponent(file.type || '')}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream',
+              'X-File-Name': encodeURIComponent(file.name),
+            },
+            body: file, // ← stream directly, no FormData wrapper
+          }
+        )
         const payload = (await res.json().catch(() => ({}))) as { error?: string }
-        
         if (!res.ok) {
           reportIssue('Assignment upload', `${file.name}: ${payload.error ?? `Upload failed (HTTP ${res.status})`}`)
           return
         }
       }
-      
+  
       await load()
-      
+  
     } catch (e) {
-      const detail = e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error.'
+      const detail = e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error — check your connection and try again.'
       reportIssue('Assignment upload', `Upload could not be sent. ${detail}`)
     } finally {
       setUploading(false)

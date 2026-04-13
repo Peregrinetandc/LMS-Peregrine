@@ -22,28 +22,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const formData = await request.formData()
-    const file = formData.get('file')
-    const assignmentId = formData.get('assignmentId')
+    const { searchParams } = new URL(request.url)
+    const assignmentId = searchParams.get('assignmentId')?.trim()
+    const rawFileName = searchParams.get('fileName') ?? ''
+    const fileName = decodeURIComponent(rawFileName) || 'upload'
+    const clientMime = searchParams.get('mimeType') ? decodeURIComponent(searchParams.get('mimeType')!) : ''
 
-    if (!(file instanceof File) || typeof assignmentId !== 'string' || !assignmentId.trim()) {
-      return NextResponse.json({ error: 'Missing file or assignmentId' }, { status: 400 })
+    if (!assignmentId) {
+      return NextResponse.json({ error: 'Missing assignmentId' }, { status: 400 })
     }
 
-    if (file.size > MAX_FILE_BYTES) {
+    const contentLength = Number(request.headers.get('content-length') ?? '0')
+    if (contentLength > MAX_FILE_BYTES) {
       return NextResponse.json(
         { error: `Each file must be under ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB.` },
         { status: 400 },
       )
     }
 
-    const mime = file.type || guessMime(file.name)
-    if (!isAllowedAssignmentMime(mime, file.name)) {
+    const mime = clientMime || guessMime(fileName)
+    if (!isAllowedAssignmentMime(mime, fileName)) {
       return NextResponse.json(
-        {
-          error:
-            'Allowed types: PDF, Word (.doc/.docx), Excel/CSV, images (PNG, JPEG, GIF, WebP), MP4 video.',
-        },
+        { error: 'Allowed types: PDF, Word (.doc/.docx), Excel/CSV, images (PNG, JPEG, GIF, WebP), MP4 video.' },
         { status: 400 },
       )
     }
@@ -62,20 +62,14 @@ export async function POST(request: Request) {
       console.error(exErr)
       return NextResponse.json({ error: exErr.message }, { status: 500 })
     }
-
     if (existing?.graded_at) {
       return NextResponse.json({ error: 'This assignment is already graded.' }, { status: 400 })
     }
-
     if (existing?.is_turned_in) {
-      return NextResponse.json(
-        { error: 'Unsubmit your work before adding or removing files.' },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: 'Unsubmit your work before adding or removing files.' }, { status: 400 })
     }
 
     let submissionId = existing?.id as string | undefined
-
     if (!submissionId) {
       const { data: created, error: insErr } = await db
         .from('submissions')
@@ -101,45 +95,55 @@ export async function POST(request: Request) {
       .eq('submission_id', submissionId)
 
     if (cntErr) {
-      console.error(cntErr)
       return NextResponse.json({ error: cntErr.message }, { status: 500 })
     }
 
-    const legacyCount = await db
-      .from('submissions')
-      .select('file_url')
-      .eq('id', submissionId)
-      .single()
-
-    const hasLegacyOnly =
-      legacyCount.data?.file_url &&
-      (count ?? 0) === 0
-
+    const legacyRow = await db.from('submissions').select('file_url').eq('id', submissionId).single()
+    const hasLegacyOnly = legacyRow.data?.file_url && (count ?? 0) === 0
     const effectiveCount = (count ?? 0) + (hasLegacyOnly ? 1 : 0)
     if (effectiveCount >= MAX_FILES_PER_SUBMISSION) {
-      return NextResponse.json(
-        { error: `You can attach up to ${MAX_FILES_PER_SUBMISSION} files.` },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: `You can attach up to ${MAX_FILES_PER_SUBMISSION} files.` }, { status: 400 })
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const safeSegment = file.name.replace(/[^\w.\-]+/g, '_')
-    const fileName = `assignment_${assignmentId}_${user.id}_${Date.now()}_${safeSegment}`
+    // Read stream into buffer — but now content-length is checked first so we
+    // know it's within limits before buffering
+    if (!request.body) {
+      return NextResponse.json({ error: 'No file body received.' }, { status: 400 })
+    }
+    const chunks: Uint8Array[] = []
+    let received = 0
+    const reader = request.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        received += value.byteLength
+        if (received > MAX_FILE_BYTES) {
+          return NextResponse.json(
+            { error: `File exceeds ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB limit.` },
+            { status: 400 }
+          )
+        }
+        chunks.push(value)
+      }
+    }
+    const buffer = Buffer.concat(chunks)
+
+    const safeSegment = fileName.replace(/[^\w.\-]+/g, '_')
+    const uploadName = `assignment_${assignmentId}_${user.id}_${Date.now()}_${safeSegment}`
 
     const { webViewLink, fileId: driveFileId } = await uploadAssignmentToDrive({
       buffer,
-      fileName,
-      mimeType: mime || guessMime(file.name),
+      fileName: uploadName,
+      mimeType: mime,
     })
 
-    const nextOrder = (count ?? 0)
-
+    const nextOrder = count ?? 0
     const { error: fileErr } = await db.from('submission_files').insert({
       submission_id: submissionId,
       file_url: webViewLink,
       drive_file_id: driveFileId,
-      original_name: file.name,
+      original_name: fileName,
       sort_order: nextOrder,
     })
 
@@ -157,14 +161,9 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     const primaryUrl = firstRow?.file_url ?? webViewLink
-
     const { error: upErr } = await db
       .from('submissions')
-      .update({
-        file_url: primaryUrl,
-        drive_file_id: driveFileId,
-        submitted_at: new Date().toISOString(),
-      })
+      .update({ file_url: primaryUrl, drive_file_id: driveFileId, submitted_at: new Date().toISOString() })
       .eq('id', submissionId)
 
     if (upErr) {
@@ -172,12 +171,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: upErr.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      ok: true,
-      fileUrl: webViewLink,
-      submissionId,
-      driveFileId,
-    })
+    return NextResponse.json({ ok: true, fileUrl: webViewLink, submissionId, driveFileId })
+
   } catch (e) {
     console.error(e)
     const message = e instanceof Error ? e.message : 'Upload failed'
