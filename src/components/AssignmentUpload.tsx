@@ -121,71 +121,55 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
 
   /** Pass a snapshot `Array.from(input.files)` so the list survives input reset after await. */
   async function handleAddFiles(picked: File[]) {
-    const list = picked
-    if (!list.length) return
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      reportIssue('Assignment upload', 'You must be signed in.')
-      return
-    }
-    if (files.length + list.length > MAX_FILES_PER_SUBMISSION) {
-      reportIssue(
-        'Assignment upload',
-        `You can attach up to ${MAX_FILES_PER_SUBMISSION} files.`,
-      )
-      return
-    }
-
-    for (const file of list) {
-      if (file.size > MAX_FILE_BYTES) {
-        reportIssue(
-          'Assignment upload',
-          `"${file.name}" is too large (max ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB per file).`,
-        )
-        return
-      }
-      const mime = file.type
-      if (!isAllowedAssignmentMime(mime, file.name)) {
-        reportIssue(
-          'Assignment upload',
-          `"${file.name}" is not an allowed type (PDF, Word, Excel, CSV, images, or MP4 video).` +
-            (mime ? ` (device reported type: ${mime})` : ' (device reported no file type — try renaming to .pdf or use “Files” to pick the document).'),
-        )
-        return
-      }
-    }
-
-    setUploading(true)
+    if (!picked.length) return
+    
+    setUploading(true)  
     setErrorMsg('')
+    
     try {
-      for (const file of list) {
-        try {
-          const formData = new FormData()
-          formData.set('file', file)
-          formData.set('assignmentId', assignmentId)
-          const res = await fetch('/api/assignments/upload', { method: 'POST', body: formData })
-          const payload = (await res.json().catch(() => ({}))) as { error?: string }
-          if (!res.ok) {
-            const msg =
-              payload.error ??
-              `Upload failed (HTTP ${res.status}). Check connection or try a smaller file.`
-            reportIssue('Assignment upload', `${file.name}: ${msg}`)
-            break
-          }
-        } catch (e) {
-          const detail =
-            e instanceof Error
-              ? `${e.name}: ${e.message}`
-              : 'Unknown error — often a network drop or browser blocking the request.'
-          reportIssue(
-            'Assignment upload',
-            `"${file.name}" could not be sent. ${detail}`,
-          )
-          break
+      const supabase = createClient()
+      const { data, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !data?.user) {
+        reportIssue('Assignment upload', 'You must be signed in.')
+        return
+      }
+  
+      if (files.length + picked.length > MAX_FILES_PER_SUBMISSION) {
+        reportIssue('Assignment upload', `You can attach up to ${MAX_FILES_PER_SUBMISSION} files.`)
+        return
+      }
+  
+      for (const file of picked) {
+        if (file.size > MAX_FILE_BYTES) {
+          reportIssue('Assignment upload', `"${file.name}" is too large.`)
+          return
+        }
+        if (!isAllowedAssignmentMime(file.type, file.name)) {
+          reportIssue('Assignment upload', `"${file.name}" is not an allowed type.`)
+          return
         }
       }
+  
+      for (const file of picked) {
+        const formData = new FormData()
+        formData.set('file', file)
+        formData.set('assignmentId', assignmentId)
+        
+        const res = await fetch('/api/assignments/upload', { method: 'POST', body: formData })
+        const payload = (await res.json().catch(() => ({}))) as { error?: string }
+        
+        if (!res.ok) {
+          reportIssue('Assignment upload', `${file.name}: ${payload.error ?? `Upload failed (HTTP ${res.status})`}`)
+          return
+        }
+      }
+      
       await load()
+      
+    } catch (e) {
+      const detail = e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error.'
+      reportIssue('Assignment upload', `Upload could not be sent. ${detail}`)
     } finally {
       setUploading(false)
     }
