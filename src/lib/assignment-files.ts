@@ -9,6 +9,7 @@ const ALLOWED = new Set([
   'image/jpeg',
   'image/gif',
   'image/webp',
+  'video/mp4',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword',
   // Spreadsheets
@@ -32,7 +33,8 @@ export function isAllowedAssignmentMime(mime: string, fileName: string): boolean
     lower.endsWith('.doc') ||
     lower.endsWith('.csv') ||
     lower.endsWith('.xlsx') ||
-    lower.endsWith('.xls')
+    lower.endsWith('.xls') ||
+    lower.endsWith('.mp4')
   )
 }
 
@@ -52,5 +54,6 @@ export function guessMime(fileName: string): string {
     return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   }
   if (lower.endsWith('.xls')) return 'application/vnd.ms-excel'
+  if (lower.endsWith('.mp4')) return 'video/mp4'
   return 'application/octet-stream'
 }

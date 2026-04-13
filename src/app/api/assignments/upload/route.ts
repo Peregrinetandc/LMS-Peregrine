@@ -40,7 +40,10 @@ export async function POST(request: Request) {
     const mime = file.type || guessMime(file.name)
     if (!isAllowedAssignmentMime(mime, file.name)) {
       return NextResponse.json(
-        { error: 'Allowed types: PDF, Word (.doc/.docx), images (PNG, JPEG, GIF, WebP).' },
+        {
+          error:
+            'Allowed types: PDF, Word (.doc/.docx), Excel/CSV, images (PNG, JPEG, GIF, WebP), MP4 video.',
+        },
         { status: 400 },
       )
     }

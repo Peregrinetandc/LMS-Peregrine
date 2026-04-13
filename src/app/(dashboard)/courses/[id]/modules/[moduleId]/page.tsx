@@ -14,6 +14,8 @@ import NextLessonButton from './NextLessonButton'
 import { ROLES } from '@/lib/roles'
 import { firstEmbeddedAssignment } from '@/lib/embedded-assignment'
 import { formatLocalDisplay } from '@/lib/timestamp'
+import { isLessonPageDiagnosticsEnabled } from '@/lib/lesson-page-diagnostics'
+import ModuleLessonDiagnostics from './ModuleLessonDiagnostics'
 
 function sortNested<T extends { sort_order?: number }>(arr: T[] | null | undefined): T[] {
   return [...(arr ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -21,6 +23,7 @@ function sortNested<T extends { sort_order?: number }>(arr: T[] | null | undefin
 
 export default async function ModulePage({ params }: { params: Promise<{ id: string; moduleId: string }> }) {
   const { id: courseId, moduleId } = await params
+  const showLessonDiagnostics = isLessonPageDiagnosticsEnabled()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -50,7 +53,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
 
   if (!isCourseStaff && !enrollment) redirect(`/courses/${courseId}`)
 
-  const { data: mod } = await supabase
+  const { data: mod, error: modulesQueryError } = await supabase
     .from('modules')
     .select(
       `
@@ -65,17 +68,48 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
     .eq('id', moduleId)
     .single()
 
-  if (!mod) notFound()
+  if (!mod) {
+    if (modulesQueryError?.code === 'PGRST116') {
+      notFound()
+    }
+    return (
+      <>
+        {showLessonDiagnostics && (
+          <ModuleLessonDiagnostics
+            moduleFetchError={modulesQueryError?.message ?? 'Lesson not found.'}
+            assignmentEmbedMissing={false}
+            secondaryErrorsSummary={null}
+          />
+        )}
+        <div className="mx-auto max-w-lg space-y-3 py-16 text-center">
+          <h1 className="text-lg font-semibold text-slate-900">Could not load this lesson</h1>
+          <p className="text-sm text-slate-600">{modulesQueryError?.message ?? 'No data returned.'}</p>
+          <Link
+            href={`/courses/${courseId}`}
+            className="inline-block text-sm font-medium text-blue-600 underline"
+          >
+            Back to course
+          </Link>
+        </div>
+      </>
+    )
+  }
 
-  let assignmentRow = firstEmbeddedAssignment(mod.assignments)
-  if (mod.type === 'assignment' && !assignmentRow) {
-    const { data: asn } = await supabase
+  const assignmentRow = firstEmbeddedAssignment(mod.assignments)
+  const secondaryErrors: string[] = []
+
+  /* TESTING embed-only path: re-enable if nested `assignments` is empty but row exists in DB.
+  let ar = firstEmbeddedAssignment(mod.assignments)
+  if (mod.type === 'assignment' && !ar) {
+    const { data: asn, error: asnErr } = await supabase
       .from('assignments')
       .select('id, description, max_score, passing_score, deadline_at, allow_late')
       .eq('module_id', moduleId)
       .maybeSingle()
-    assignmentRow = firstEmbeddedAssignment(asn)
+    if (asnErr) console.error('[lesson] assignments fallback', asnErr)
+    ar = firstEmbeddedAssignment(asn)
   }
+  */
 
   const passingPct =
     typeof mod.quiz_passing_pct === 'number'
@@ -132,16 +166,17 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
   let assignmentGraded = false
 
   if (enrollment) {
-    const { data: progress } = await supabase
+    const { data: progress, error: progressErr } = await supabase
       .from('module_progress')
       .select('is_completed')
       .eq('module_id', moduleId)
       .eq('learner_id', user.id)
       .maybeSingle()
+    if (progressErr) secondaryErrors.push(`module_progress: ${progressErr.message}`)
     progressCompleted = !!progress?.is_completed
 
     if (mod.type === 'mcq') {
-      const { data: attempt } = await supabase
+      const { data: attempt, error: attemptErr } = await supabase
         .from('quiz_attempts')
         .select('score, max_score, passed')
         .eq('module_id', moduleId)
@@ -150,6 +185,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
         .order('submitted_at', { ascending: false })
         .limit(1)
         .maybeSingle()
+      if (attemptErr) secondaryErrors.push(`quiz_attempts: ${attemptErr.message}`)
       if (attempt) {
         const maxScore = (attempt.max_score as number) ?? 0
         const score = (attempt.score as number) ?? 0
@@ -164,12 +200,13 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
       }
     }
     if (mod.type === 'feedback') {
-      const { data: fb } = await supabase
+      const { data: fb, error: fbErr } = await supabase
         .from('module_feedback_submissions')
         .select('id')
         .eq('module_id', moduleId)
         .eq('learner_id', user.id)
         .maybeSingle()
+      if (fbErr) secondaryErrors.push(`module_feedback_submissions: ${fbErr.message}`)
       feedbackSubmitted = !!fb
     }
     if (mod.type === 'live_session' || mod.type === 'offline_session') {
@@ -178,12 +215,13 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
     if (mod.type === 'assignment') {
       const assignmentId = assignmentRow?.id
       if (assignmentId) {
-        const { data: sub } = await supabase
+        const { data: sub, error: subErr } = await supabase
           .from('submissions')
           .select('graded_at')
           .eq('assignment_id', assignmentId)
           .eq('learner_id', user.id)
           .maybeSingle()
+        if (subErr) secondaryErrors.push(`submissions: ${subErr.message}`)
         assignmentGraded = !!sub?.graded_at
       }
     }
@@ -198,11 +236,12 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
 
   let nextModule: { id: string; title: string; locked: boolean; unlockAt: string | null } | null = null
   if (enrollment && !isCourseStaff) {
-    const { data: orderedMods } = await supabase
+    const { data: orderedMods, error: orderedModsErr } = await supabase
       .from('modules')
       .select('id, title, available_from')
       .eq('course_id', courseId)
       .order('sort_order', { ascending: true })
+    if (orderedModsErr) secondaryErrors.push(`next-module list: ${orderedModsErr.message}`)
 
     const list = orderedMods ?? []
     const currentIdx = list.findIndex((m) => m.id === moduleId)
@@ -236,6 +275,17 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
         ? `Next lesson unlocks on ${nextModule.unlockAt ? new Date(nextModule.unlockAt).toLocaleString() : 'a scheduled date'}.`
         : 'Next lesson unavailable.'
 
+  const assignmentEmbedMissing = mod.type === 'assignment' && !assignmentRow
+  const secondaryErrorsSummary =
+    secondaryErrors.length > 0 ? secondaryErrors.join('\n') : null
+
+  const diagnosticsProps = {
+    // When `mod` is loaded, Supabase typings treat `modulesQueryError` as empty; any fetch warning is in secondaryErrors.
+    moduleFetchError: null as string | null,
+    assignmentEmbedMissing,
+    secondaryErrorsSummary,
+  }
+
   // Time-lock check (learners only; staff can preview)
   if (
     !isCourseStaff &&
@@ -244,6 +294,8 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
   ) {
     const unlockDate = new Date(mod.available_from).toLocaleString()
     return (
+      <>
+        {showLessonDiagnostics && <ModuleLessonDiagnostics {...diagnosticsProps} />}
       <div className="max-w-2xl mx-auto text-center py-20">
         <div className="text-6xl mb-4">🔒</div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Lesson Locked</h1>
@@ -251,6 +303,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
           This lesson unlocks on <strong>{unlockDate}</strong>.
         </p>
       </div>
+      </>
     )
   }
 
@@ -258,6 +311,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5 lg:mt-4">
+      {showLessonDiagnostics && <ModuleLessonDiagnostics {...diagnosticsProps} />}
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
         Week {mod.week_index ?? 1}
       </p>
@@ -314,6 +368,16 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
             </div>
           )}
           <AssignmentUpload assignmentId={assignmentRow.id} />
+        </div>
+      )}
+
+      {mod.type === 'assignment' && !assignmentRow && (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Assignment details not in embedded response</p>
+          <p className="text-xs text-amber-800">
+            Embed-only mode (fallback query disabled). See warning toast — if the row exists in the DB, re-enable the
+            fallback block in <code className="rounded bg-amber-100 px-1">page.tsx</code> or fix the nested select.
+          </p>
         </div>
       )}
 
