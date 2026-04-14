@@ -28,7 +28,7 @@ function GradingTable({ list, modifiedSubmissionIds, scores, feedback, handleSco
   return (
     <div 
       ref={parentRef} 
-      className="overflow-auto max-h-[600px] min-h-[250px] border-t border-slate-200"
+      className="overflow-auto max-h-150 min-h-62.5 border-t border-slate-200"
     >
       <div
         style={{
@@ -38,12 +38,12 @@ function GradingTable({ list, modifiedSubmissionIds, scores, feedback, handleSco
         }}
       >
         <div className="sticky top-0 z-10 flex border-b border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 shadow-sm">
-          <div className="flex-[2] p-3">Learner</div>
-          <div className="flex-[2] p-3">Lesson</div>
+          <div className="flex-2 p-3">Learner</div>
+          <div className="flex-2 p-3">Lesson</div>
           <div className="flex-1 p-3">Status</div>
           <div className="flex-1 p-3">Files</div>
           <div className="w-32 p-3">Score</div>
-          <div className="flex-[3] p-3">Feedback</div>
+          <div className="flex-3 p-3">Feedback</div>
         </div>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const r = list[virtualRow.index]
@@ -60,10 +60,10 @@ function GradingTable({ list, modifiedSubmissionIds, scores, feedback, handleSco
                 marginTop: '45px', // offset for sticky header
               }}
             >
-              <div className="flex-[2] p-3 font-medium text-sm text-slate-900 text-wrap">
+              <div className="flex-2 p-3 font-medium text-sm text-slate-900 text-wrap">
                 {r.learnerName ?? r.learnerId.slice(0, 8)}
               </div>
-              <div className="flex-[2] p-3 text-slate-700 text-sm text-wrap">{r.moduleTitle}</div>
+              <div className="flex-2 p-3 text-slate-700 text-sm text-wrap">{r.moduleTitle}</div>
               <div className="flex-1 p-3">
                 {r.gradedAt ? (
                   <span className="text-emerald-700 font-semibold inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs">
@@ -92,8 +92,8 @@ function GradingTable({ list, modifiedSubmissionIds, scores, feedback, handleSco
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs"
                       >
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate max-w-[100px]">{f.name}</span>
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span className="truncate max-w-25">{f.name}</span>
                       </a>
                     ))
                   )}
@@ -113,7 +113,7 @@ function GradingTable({ list, modifiedSubmissionIds, scores, feedback, handleSco
                   <span className="text-slate-500 font-bold text-xs">/ {r.maxScore}</span>
                 </div>
               </div>
-              <div className="flex-[3] p-3">
+              <div className="flex-3 p-3">
                 <textarea
                   value={feedback[r.submissionId] ?? ''}
                   onChange={(e) => handleFeedbackChange(r.submissionId, e.target.value)}
@@ -258,7 +258,7 @@ export default function GradingClient({
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px]">
+          <div className="min-w-50">
             <label className="mb-1 block text-sm font-medium text-slate-700">Course</label>
             <select
               value={filters.courseId}
@@ -274,7 +274,7 @@ export default function GradingClient({
             </select>
           </div>
 
-          <div className="min-w-[180px]">
+          <div className="min-w-45">
             <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
             <select
               value={filters.status}
@@ -288,7 +288,7 @@ export default function GradingClient({
             </select>
           </div>
 
-          <div className="min-w-[240px] flex-1">
+          <div className="min-w-60 flex-1">
             <label className="mb-1 block text-sm font-medium text-slate-700">Learner search</label>
             <input
               type="text"
@@ -299,7 +299,7 @@ export default function GradingClient({
             />
           </div>
 
-          <div className="min-w-[120px]">
+          <div className="min-w-30">
             <label className="mb-1 block text-sm font-medium text-slate-700">Per page</label>
             <select
               value={pageSize}
