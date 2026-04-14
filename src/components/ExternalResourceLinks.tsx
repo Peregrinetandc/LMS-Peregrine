@@ -34,7 +34,7 @@ export default function ExternalResourceLinks({
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) return
-      await supabase.from('module_progress').upsert(
+      const { error } = await supabase.from('module_progress').upsert(
         {
           module_id: moduleId,
           learner_id: user.id,
@@ -44,7 +44,10 @@ export default function ExternalResourceLinks({
         },
         { onConflict: 'module_id,learner_id' },
       )
-      router.refresh()
+      if (!error) {
+        window.dispatchEvent(new Event('module-completed'))
+        router.refresh()
+      }
     }
 
     void run()
