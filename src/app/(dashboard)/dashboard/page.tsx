@@ -1,14 +1,11 @@
+import type { ReactNode } from 'react'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, FileText, Award, Clock, ChevronRight, PlusCircle, Pencil, ArrowRight, Badge } from 'lucide-react'
+import { BookOpen, FileText, Clock, ChevronRight, PlusCircle, Pencil, ArrowRight, Flame } from 'lucide-react'
 import { AppButton, AppCard, EmptyState, PageHeader } from '@/components/ui/primitives'
 import { formatLocalDisplay } from '@/lib/timestamp'
 import { ROLES, isInstructorRole } from '@/lib/roles'
-import { toRenderableImageUrl } from '@/lib/drive-image'
-import { Card, CardContent } from '@/components/ui/card'
-import { Progress } from 'radix-ui'
-import { Button } from '@/components/ui/button'
 import ContinueLearning from './ContinueLearning'
 
 export default async function DashboardPage() {
@@ -209,11 +206,15 @@ export default async function DashboardPage() {
     dueAssignments = dueAssignments.slice(0, 10)
   }
 
-  const { data: certificates } = await supabase
-    .from('certificates')
-    .select('id')
-    .eq('learner_id', user.id)
-    .eq('status', 'valid')
+  let learnerStreak = 0
+  if (!isInstructor) {
+    const { data: streakRow } = await supabase
+      .from('learning_streak_display')
+      .select('streak')
+      .eq('learner_id', user.id)
+      .maybeSingle()
+    learnerStreak = (streakRow as { streak: number } | null)?.streak ?? 0
+  }
 
   // ── Instructor data ──────────────────────────────────────────
   let myCourses:
@@ -241,27 +242,34 @@ export default async function DashboardPage() {
     myCourses = data
   }
 
-  const metrics = [
+  type MetricCard = {
+    label: string
+    value: number
+    icon: ReactNode
+    bg: string
+    hint?: string
+  }
+
+  const metrics: MetricCard[] = [
     {
-      label: isInstructor ? (isAdmin ? 'All Courses' : 'My Courses') : 'Enrolled Courses',
-      value: isInstructor ? (myCourses?.length ?? 0) : enrolledCourses.length,
-      icon: <BookOpen className="w-3 h-3 text-blue-500" />,
-      bg: 'bg-blue-50',
+      label: isInstructor ? (isAdmin ? 'All Courses' : 'My Courses') : 'Day streak',
+      value: isInstructor ? (myCourses?.length ?? 0) : learnerStreak,
+      icon: isInstructor ? (
+        <BookOpen className="w-12.5 h-12.5 text-blue-500" />
+      ) : (
+        <Flame className="w-12.5 h-12.5 text-orange-500" />
+      ),
+      bg: isInstructor ? 'bg-blue-50' : 'bg-orange-50',
+      hint: !isInstructor && learnerStreak === 0 ? 'Complete a lesson to start' : undefined,
     },
     {
       label: isInstructor ? 'Total Learners' : 'Assignments Due',
       value: isInstructor
         ? (myCourses ?? []).reduce((sum: number, c: any) => sum + (c.enrollments?.[0]?.count ?? 0), 0)
         : dueAssignments.length,
-      icon: <FileText className="w-3 h-3 text-amber-500" />,
+      icon: <FileText className="w-12.5 h-12.5 text-amber-500" />,
       bg: 'bg-amber-50',
     },
-    // {
-    //   label: 'Certificates Earned',
-    //   value: certificates?.length ?? 0,
-    //   icon: <Award className="w-3 h-3 text-green-500" />,
-    //   bg: 'bg-green-50',
-    // },
   ]
 
   return (
@@ -279,25 +287,24 @@ export default async function DashboardPage() {
       />
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {metrics.map((m) => (
           <AppCard
             key={m.label}
-            className="p-5 flex flex-row justify-between gap-4 rounded-2xl"
+            className="relative overflow-hidden p-5 flex flex-row justify-between gap-4 rounded-2xl"
           >
-            <div>
-              <p className="text-xs font-medium text-slate-600">{m.label}</p>
-              <p className="text-2xl font-bold text-slate-900 tracking-tight">{m.value}</p>
-            </div>
-            <div className="flex justify-end items-start">
-              <div className={`${m.bg} p-2.5 rounded-lg shadow-inner`}>
-                {m.icon}
-              </div>
-              {/* Optional: Add a "trend" badge here if you have the data */}
-              {/* <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">+12%</span> */}
+            {/* Background icon — contained properly */}
+            <div className="pointer-events-none absolute opacity-30 -right-4 -bottom-4 text-slate-200 [&>svg]:w-20 [&>svg]:h-20">
+              {m.icon}
             </div>
 
-
+            <div className="relative z-10 min-w-0 flex flex-col justify-between gap-0.5">
+              <p className="text-xs font-bold text-slate-500">{m.label}</p>
+              <p className="text-4xl font-bold text-slate-900 tracking-tight">{m.value}</p>
+              {m.hint ? (
+                <p className="text-[11px] text-slate-400 leading-snug">{m.hint}</p>
+              ) : null}
+            </div>
           </AppCard>
         ))}
       </div>

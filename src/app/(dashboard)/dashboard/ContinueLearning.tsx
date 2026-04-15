@@ -52,7 +52,7 @@ function EmptyState() {
         <GraduationCap className="w-6 h-6 text-slate-400" />
       </div>
       <p className="text-sm font-semibold text-slate-700 mb-1">No enrolled courses</p>
-      <p className="text-xs text-slate-400 mb-4 max-w-[180px]">
+      <p className="text-xs text-slate-400 mb-4 max-w-45">
         Browse the catalog to enroll and start learning.
       </p>
       <Link href="/courses">

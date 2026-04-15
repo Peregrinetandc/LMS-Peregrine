@@ -334,6 +334,15 @@ create table public.module_progress (
   unique (module_id, learner_id)
 );
 
+-- Rollup: updated by trigger private.maintain_learning_streak (see migration 20260415120000_learning_streak.sql)
+create table public.learning_streak (
+  learner_id        uuid primary key references public.profiles(id) on delete cascade,
+  current_streak    integer not null default 0,
+  longest_streak    integer not null default 0,
+  last_success_day  date,
+  updated_at        timestamptz not null default now()
+);
+
 -- Instructor/admin-marked attendance for live/offline session modules (once per module)
 create table public.module_session_roster (
   id                    uuid primary key default gen_random_uuid(),
@@ -474,6 +483,7 @@ alter table public.submissions enable row level security;
 alter table public.submission_files enable row level security;
 alter table public.attendance enable row level security;
 alter table public.module_progress enable row level security;
+alter table public.learning_streak enable row level security;
 alter table public.module_session_roster enable row level security;
 alter table public.module_external_links enable row level security;
 alter table public.quiz_questions enable row level security;
@@ -1042,6 +1052,31 @@ create policy "Staff view module progress for their courses"
         and c.instructor_id = auth.uid()
     )
   );
+
+create policy "learner reads own streak"
+  on public.learning_streak for select
+  to authenticated
+  using (auth.uid() = learner_id);
+
+revoke all on public.learning_streak from public;
+grant select on public.learning_streak to authenticated;
+
+create or replace view public.learning_streak_display
+with (security_invoker = true)
+as
+select
+  learner_id,
+  last_success_day,
+  longest_streak,
+  case
+    when last_success_day is not null
+      and last_success_day >= ((timezone('UTC', now()))::date - 1)
+    then current_streak
+    else 0
+  end as streak
+from public.learning_streak;
+
+grant select on public.learning_streak_display to authenticated;
 
 -- Session roster: learners read own row; staff manage
 create policy "Learners read own session roster row" on public.module_session_roster
