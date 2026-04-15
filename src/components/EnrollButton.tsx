@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
 
 export default function EnrollButton({ courseId }: { courseId: string }) {
   const [loading, setLoading] = useState(false)
@@ -24,12 +25,14 @@ export default function EnrollButton({ courseId }: { courseId: string }) {
   }
 
   return (
-    <button
+    <Button
+      type="button"
       onClick={handleEnroll}
       disabled={loading}
-      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 px-6 rounded-lg shadow transition duration-200"
+      size="lg"
+      className="w-full min-h-11 sm:w-auto"
     >
-      {loading ? 'Enrolling…' : 'Enroll Now'}
-    </button>
+      {loading ? 'Enrolling…' : 'Enroll now'}
+    </Button>
   )
 }

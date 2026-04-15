@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image"; // Next.js Image component
 import { BookOpen, ChevronRight, GraduationCap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +53,7 @@ function EmptyState() {
         <GraduationCap className="w-6 h-6 text-slate-400" />
       </div>
       <p className="text-sm font-semibold text-slate-700 mb-1">No enrolled courses</p>
-      <p className="text-xs text-slate-400 mb-4 max-w-45">
+      <p className="text-xs text-slate-400 mb-4 max-w-[180px]">
         Browse the catalog to enroll and start learning.
       </p>
       <Link href="/courses">
@@ -93,8 +94,7 @@ export default function ContinueLearning({ enrolledCourses }: ContinueLearningPr
           </CardContent>
         </Card>
       ) : (
-        /* 1-col on mobile, 2-col on md+ screens */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {enrolledCourses.map((course, i) => {
             const progress = course.progress ?? 0;
             const tile = TILE_STYLES[i % TILE_STYLES.length];
@@ -104,64 +104,69 @@ export default function ContinueLearning({ enrolledCourses }: ContinueLearningPr
               <Link key={course.id} href={`/courses/${course.id}`} className="block group">
                 <Card
                   className={cn(
-                    "border-slate-200 shadow-sm rounded-2xl overflow-hidden transition-all duration-200",
-                    "hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5"
+                    "relative border-slate-200 shadow-sm rounded-2xl overflow-hidden transition-all duration-300",
+                    "hover:shadow-lg hover:border-blue-300 hover:-translate-y-1 h-full bg-white"
                   )}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      {/* Icon tile */}
-                      <div
+                  {/* 1. Background Thumbnail Layer */}
+                  <div className="absolute inset-0 z-0">
+                    {course.thumbnail_url ? (
+                      <Image
+                        src={toRenderableImageUrl(course.thumbnail_url)}
+                        alt={course.title}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-500 opacity-50 group-hover:scale-105 group-hover:opacity-100"
+                        quality={60} // Faster scroll performance
+                      />
+                    ) : (
+                      <div className={cn("w-full h-full opacity-10", tile.bg)} />
+                    )}
+                    
+                    {/* 2. Gradient Overlay for readability (Bottom-to-Top Fade) */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-white/40" />
+                  </div>
+
+                  {/* 3. Content Layer */}
+                  <CardContent className="relative z-10 px-5 h-full flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] font-bold text-slate-500 bg-white/90 border-slate-200 mb-2 px-2 h-5 uppercase tracking-wider"
+                          >
+                            {course.course_code}
+                          </Badge>
+                          
+                          <h3 className="text-[13px] line-clamp-2 font-bold text-slate-800 leading-snug group-hover:text-blue-700 transition-colors duration-200">
+                            {course.title}
+                          </h3>
+                        </div>
+
+                        <div className="shrink-0 mt-1">
+                          <div className="bg-white/80 p-1 rounded-full border border-slate-100 shadow-sm transition-colors group-hover:bg-blue-50">
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all duration-200" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Section */}
+                    <div className="mt-8 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-medium text-slate-500">
+                          {progress}% complete
+                        </span>
+                        <ProgressLabel progress={progress} />
+                      </div>
+                      <Progress
+                        value={progress}
                         className={cn(
-                          "shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-200",
-                          tile.bg
+                          "h-1.5 bg-slate-200/50 [&>div]:rounded-full [&>div]:transition-all [&>div]:duration-500",
+                          barColor
                         )}
-                      >
-                        {course.thumbnail_url ? (
-                          <img
-                            src={toRenderableImageUrl(course.thumbnail_url)}
-                            alt={course.title}
-                            className="w-full h-full object-cover rounded-xl"
-                          />
-                        ) : (
-                          <BookOpen className={cn("w-5 h-5", tile.icon)} />
-                        )}
-                      </div>
-
-                      {/* Body */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-1.5">
-                          <div className="min-w-0 flex-1">
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px] font-semibold text-slate-400 bg-slate-100 hover:bg-slate-100 mb-1.5 px-1.5 h-4 uppercase tracking-wider"
-                            >
-                              {course.course_code}
-                            </Badge>
-                            <h3 className="text-[13px] font-semibold text-slate-800 leading-snug group-hover:text-blue-700 transition-colors duration-200 line-clamp-2">
-                              {course.title}
-                            </h3>
-                          </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all duration-200 mt-1 shrink-0" />
-                        </div>
-
-                        {/* Progress */}
-                        <div className="mt-2.5 space-y-1.5">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[11px] text-slate-400">
-                              {progress}% complete
-                            </span>
-                            <ProgressLabel progress={progress} />
-                          </div>
-                          <Progress
-                            value={progress}
-                            className={cn(
-                              "h-1.5 bg-slate-100 [&>div]:rounded-full [&>div]:transition-all [&>div]:duration-500",
-                              barColor
-                            )}
-                          />
-                        </div>
-                      </div>
+                      />
                     </div>
                   </CardContent>
                 </Card>

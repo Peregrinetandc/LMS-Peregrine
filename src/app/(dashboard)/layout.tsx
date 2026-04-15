@@ -86,7 +86,7 @@ export default async function DashboardLayout({
                   alt="Peregrine T&C"
                   width={45}
                   height={45}
-                  className="shrink-0"
+                  className="shrink-0 rounded-full"
                 />
                 <span className="text-base font-bold text-slate-900 sm:text-lg">Peregrine T&C</span>
               </Link>

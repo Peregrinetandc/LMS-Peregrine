@@ -17,6 +17,7 @@ import {
   MessageSquare,
   ExternalLink,
   CircleAlert,
+  CheckCircle,
 } from 'lucide-react'
 import type { ModuleUiStatus } from '@/lib/learner-module-status'
 
@@ -236,7 +237,7 @@ export default function ModuleSidebar({
                                 title="Completed"
                                 aria-label="Completed"
                               >
-                                <Check className="w-4 h-4" aria-hidden />
+                                <CheckCircle className="w-4 h-4" aria-hidden />
                               </span>
                             )}
                             {ui?.overdue && !ui?.complete && (
