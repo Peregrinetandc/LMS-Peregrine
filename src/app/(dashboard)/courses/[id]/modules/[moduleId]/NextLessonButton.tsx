@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { useEffect } from 'react'
-import { useModuleProgressStore } from '@/stores/module-progress.store'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/query-keys'
 
 interface NextLessonButtonProps {
   courseId: string
@@ -20,13 +21,22 @@ export default function NextLessonButton({
   initialCompleted, 
   nextDisabledReason 
 }: NextLessonButtonProps) {
-  const hydrate = useModuleProgressStore((state) => state.hydrate)
-  const isCompleted = useModuleProgressStore((state) => !!state.completedByModuleId[currentModuleId])
+  const queryClient = useQueryClient()
+  const moduleProgressQuery = useQuery({
+    queryKey: queryKeys.moduleProgress({ moduleId: currentModuleId }),
+    queryFn: async () => ({ completed: initialCompleted }),
+    initialData: { completed: initialCompleted },
+    enabled: false,
+    staleTime: Infinity,
+  })
+  const isCompleted = Boolean(moduleProgressQuery.data?.completed)
 
   useEffect(() => {
     if (!initialCompleted) return
-    hydrate([currentModuleId])
-  }, [currentModuleId, hydrate, initialCompleted])
+    queryClient.setQueryData(queryKeys.moduleProgress({ moduleId: currentModuleId }), {
+      completed: true,
+    })
+  }, [currentModuleId, initialCompleted, queryClient])
 
   if (!nextModule) return null
 

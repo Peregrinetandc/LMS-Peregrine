@@ -2,12 +2,14 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { BookOpen, ChevronRight, Search, Users } from 'lucide-react'
 import { EmptyState } from '@/components/ui/primitives'
 import { toRenderableImageUrl } from '@/lib/drive-image'
 import { CATALOG_PAGE_SIZE, type CatalogCourse, type CatalogDepartment } from '@/lib/catalog-courses'
-import { useCourseCatalogStore } from '@/stores/course-catalog.store'
+import { queryKeys } from '@/lib/query/query-keys'
 
 export type { CatalogCourse, CatalogDepartment } from '@/lib/catalog-courses'
 
@@ -114,19 +116,46 @@ export function CourseCatalog({
   departmentId: string
   fetchError: string | null
 }) {
-  const courses = useCourseCatalogStore((state) => state.courses)
-  const totalCount = useCourseCatalogStore((state) => state.totalCount)
-  const page = useCourseCatalogStore((state) => state.page)
-  const q = useCourseCatalogStore((state) => state.q)
-  const departmentId = useCourseCatalogStore((state) => state.departmentId)
-  const fetchError = useCourseCatalogStore((state) => state.fetchError)
-  const pending = useCourseCatalogStore((state) => state.pending)
-  const hydrate = useCourseCatalogStore((state) => state.hydrate)
-  const setQuery = useCourseCatalogStore((state) => state.setQuery)
-  const setDepartment = useCourseCatalogStore((state) => state.setDepartmentId)
-  const resetFilters = useCourseCatalogStore((state) => state.resetFilters)
-  const loadPage = useCourseCatalogStore((state) => state.loadPage)
+  const router = useRouter()
+  const [draftQ, setDraftQ] = useState(initialQ)
+  const [draftDepartmentId, setDraftDepartmentId] = useState(initialDepartmentId)
 
+  const params = useMemo(
+    () => ({ q: initialQ.trim(), dept: initialDepartmentId.trim(), page: initialPage }),
+    [initialDepartmentId, initialPage, initialQ],
+  )
+  const catalogQuery = useQuery({
+    queryKey: queryKeys.coursesCatalog(params),
+    queryFn: async () => {
+      const urlParams = new URLSearchParams()
+      if (params.q) urlParams.set('q', params.q)
+      if (params.dept) urlParams.set('dept', params.dept)
+      if (params.page > 1) urlParams.set('page', String(params.page))
+      const qs = urlParams.toString()
+      const url = qs ? `/api/courses/catalog?${qs}` : '/api/courses/catalog'
+      const res = await fetch(url, { cache: 'no-store' })
+      const json = (await res.json()) as {
+        courses?: CatalogCourse[]
+        totalCount?: number
+        error?: string
+      }
+      if (!res.ok) throw new Error(json.error || 'Failed to load course catalog.')
+      return {
+        courses: json.courses ?? [],
+        totalCount: json.totalCount ?? 0,
+      }
+    },
+    initialData: {
+      courses: initialCourses,
+      totalCount: initialTotalCount,
+    },
+  })
+
+  const courses = useMemo(() => catalogQuery.data?.courses ?? [], [catalogQuery.data?.courses])
+  const totalCount = catalogQuery.data?.totalCount ?? 0
+  const page = initialPage
+  const fetchError = catalogQuery.error instanceof Error ? catalogQuery.error.message : initialFetchError
+  const pending = catalogQuery.isFetching
   const sections = useMemo(() => groupCatalogByDepartment(courses), [courses])
   const from = totalCount === 0 ? 0 : (page - 1) * CATALOG_PAGE_SIZE + 1
   const to = Math.min(page * CATALOG_PAGE_SIZE, totalCount)
@@ -134,24 +163,14 @@ export function CourseCatalog({
   const countLabel =
     totalCount === 1 ? '1 course matches' : `${totalCount} courses match`
 
-  useEffect(() => {
-    hydrate({
-      courses: initialCourses,
-      totalCount: initialTotalCount,
-      page: initialPage,
-      q: initialQ,
-      departmentId: initialDepartmentId,
-      fetchError: initialFetchError,
-    })
-  }, [
-    hydrate,
-    initialCourses,
-    initialDepartmentId,
-    initialFetchError,
-    initialPage,
-    initialQ,
-    initialTotalCount,
-  ])
+  function navigate(nextPage: number, nextQuery: string, nextDept: string) {
+    const params = new URLSearchParams()
+    if (nextQuery.trim()) params.set('q', nextQuery.trim())
+    if (nextDept.trim()) params.set('dept', nextDept.trim())
+    if (nextPage > 1) params.set('page', String(nextPage))
+    const query = params.toString()
+    router.push(query ? `/courses?${query}` : '/courses')
+  }
 
   if (fetchError) {
     return (
@@ -179,7 +198,7 @@ export function CourseCatalog({
             className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:max-w-xl"
             onSubmit={(e) => {
               e.preventDefault()
-              void loadPage(1, q, departmentId)
+              navigate(1, draftQ, draftDepartmentId)
             }}
           >
             <div className="min-w-0 flex-1">
@@ -197,8 +216,8 @@ export function CourseCatalog({
                   inputMode="search"
                   autoComplete="off"
                   placeholder="Title, code, description…"
-                  value={q}
-                  onChange={(e) => setQuery(e.target.value)}
+                  value={draftQ}
+                  onChange={(e) => setDraftQ(e.target.value)}
                   className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
@@ -209,8 +228,8 @@ export function CourseCatalog({
               </label>
               <select
                 id="course-catalog-dept"
-                value={departmentId}
-                onChange={(e) => setDepartment(e.target.value)}
+                value={draftDepartmentId}
+                onChange={(e) => setDraftDepartmentId(e.target.value)}
                 className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               >
                 <option value="">All departments</option>
@@ -232,8 +251,9 @@ export function CourseCatalog({
               type="button"
               disabled={pending}
               onClick={() => {
-                resetFilters()
-                void loadPage(1, '', '')
+                setDraftQ('')
+                setDraftDepartmentId('')
+                navigate(1, '', '')
               }}
               className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
@@ -244,7 +264,7 @@ export function CourseCatalog({
       </section>
 
       {totalCount === 0 ? (
-        q.trim() || departmentId ? (
+        initialQ.trim() || initialDepartmentId ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
             <h3 className="text-base font-semibold text-slate-800 sm:text-lg">No matches</h3>
             <p className="mt-1 text-sm text-slate-500">
@@ -253,8 +273,9 @@ export function CourseCatalog({
             <button
               type="button"
               onClick={() => {
-                resetFilters()
-                void loadPage(1, '', '')
+                setDraftQ('')
+                setDraftDepartmentId('')
+                navigate(1, '', '')
               }}
               className="mt-4 inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
@@ -301,7 +322,7 @@ export function CourseCatalog({
               {page > 1 ? (
                 <button
                   type="button"
-                  onClick={() => void loadPage(page - 1, q, departmentId)}
+                  onClick={() => navigate(page - 1, initialQ, initialDepartmentId)}
                   disabled={pending}
                   className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
                 >
@@ -311,7 +332,7 @@ export function CourseCatalog({
               {hasMore ? (
                 <button
                   type="button"
-                  onClick={() => void loadPage(page + 1, q, departmentId)}
+                  onClick={() => navigate(page + 1, initialQ, initialDepartmentId)}
                   disabled={pending}
                   className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
                 >
