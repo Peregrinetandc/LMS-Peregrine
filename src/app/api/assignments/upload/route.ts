@@ -10,6 +10,8 @@ import {
 } from '@/lib/assignment-files'
 
 export const runtime = 'nodejs'
+/** Large uploads + Drive need time; without this, hosts may cut the connection → client "Failed to fetch". */
+export const maxDuration = 300
 
 export async function POST(request: Request) {
   try {

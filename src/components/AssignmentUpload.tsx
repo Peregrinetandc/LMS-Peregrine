@@ -12,7 +12,6 @@ import {
 import {
   Upload,
   CheckCircle2,
-  AlertCircle,
   FileText,
   Loader2,
   Send,
@@ -20,7 +19,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { queryKeys } from '@/lib/query/query-keys'
-import { fetchWithRetry } from '@/lib/network-retry'
+import { fetchWithRetry, getFetchErrorMessage } from '@/lib/network-retry'
 
 type ApiSubmission = {
   id: string
@@ -44,11 +43,9 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
   const queryClient = useQueryClient()
   const [uploading, setUploading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
 
-  /** Inline banner + toast (toasts survive scroll and are obvious on Android Chrome / WebView). */
+  /** Toast only — survives scroll and stays obvious on small screens / WebView. */
   const reportIssue = useCallback((title: string, message: string) => {
-    setErrorMsg(message)
     toast.error(title, {
       description: message,
       duration: UPLOAD_ISSUE_TOAST_MS,
@@ -56,7 +53,6 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
   }, [])
 
   const loadSubmission = useCallback(async () => {
-    setErrorMsg('')
     const res = await fetchWithRetry(
       `/api/assignments/submission?assignmentId=${encodeURIComponent(assignmentId)}`,
     )
@@ -119,8 +115,7 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
     if (!picked.length) return
   
     setUploading(true)
-    setErrorMsg('')
-  
+
     try {
       const supabase = createClient()
       const { data, error: authError } = await supabase.auth.getUser()
@@ -168,7 +163,8 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
               'X-File-Name': encodeURIComponent(file.name),
             },
             body: file, // ← stream directly, no FormData wrapper
-          }
+          },
+          { retries: 4, baseDelayMs: 700 },
         )
         const payload = (await res.json().catch(() => ({}))) as { error?: string }
         if (!res.ok) {
@@ -180,8 +176,7 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
       await queryClient.invalidateQueries({ queryKey: queryKeys.assignmentSubmission({ assignmentId }) })
   
     } catch (e) {
-      const detail = e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error — check your connection and try again.'
-      reportIssue('Assignment upload', `Upload could not be sent. ${detail}`)
+      reportIssue('Assignment upload', getFetchErrorMessage(e))
     } finally {
       setUploading(false)
     }
@@ -189,7 +184,6 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
 
   async function removeFile(fileId: string) {
     setActionLoading(true)
-    setErrorMsg('')
     try {
       const q =
         fileId === 'legacy'
@@ -215,7 +209,6 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
 
   async function turnIn() {
     setActionLoading(true)
-    setErrorMsg('')
     try {
       const res = await fetchWithRetry('/api/assignments/turn-in', {
         method: 'POST',
@@ -242,7 +235,6 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
 
   async function unsubmit() {
     setActionLoading(true)
-    setErrorMsg('')
     try {
       const res = await fetchWithRetry('/api/assignments/unsubmit', {
         method: 'POST',
@@ -304,13 +296,6 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
           </p>
         )}
       </div>
-
-      {errorMsg && (
-        <div className="flex items-center gap-3 text-red-700 bg-red-50 border border-red-200 rounded-lg p-4">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <p className="text-sm">{errorMsg}</p>
-        </div>
-      )}
 
       {graded && submission && (
         <div className={`rounded-xl border ${submission.isPassed ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-100'} p-4 space-y-2`}>
