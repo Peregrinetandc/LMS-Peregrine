@@ -19,7 +19,11 @@ import {
   Trash2,
 } from 'lucide-react'
 import { queryKeys } from '@/lib/query/query-keys'
-import { fetchWithRetry, getFetchErrorMessage } from '@/lib/network-retry'
+import {
+  fetchWithRetry,
+  getFetchErrorMessage,
+  postFileWithRetry,
+} from '@/lib/network-retry'
 
 type ApiSubmission = {
   id: string
@@ -39,10 +43,20 @@ const ANDROID_WARN_BYTES = 50 * 1024 * 1024 // 50 MB
 /** Long duration so small-phone / WebView users can read the real server or network message. */
 const UPLOAD_ISSUE_TOAST_MS = 18_000
 
+/** Bar stays below 100% until the API returns OK (server has finished saving to Google Drive). */
+const UPLOAD_PROGRESS_MAX_IN_FLIGHT = 99
+
 export default function AssignmentUpload({ assignmentId }: { assignmentId: string }) {
   const queryClient = useQueryClient()
   const [uploading, setUploading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  /** Shown while files POST to the server (bytes sent — not server/Drive processing). */
+  const [uploadUi, setUploadUi] = useState<{
+    fileLabel: string
+    fileIndex: number
+    fileTotal: number
+    overallPercent: number
+  } | null>(null)
 
   /** Toast only — survives scroll and stays obvious on small screens / WebView. */
   const reportIssue = useCallback((title: string, message: string) => {
@@ -152,33 +166,81 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
         }
       }
   
-      for (const file of picked) {
-        // Stream the file directly — avoids loading entire file into JS heap (fixes Android OOM)
-        const res = await fetchWithRetry(
-          `/api/assignments/upload?assignmentId=${encodeURIComponent(assignmentId)}&fileName=${encodeURIComponent(file.name)}&mimeType=${encodeURIComponent(file.type || '')}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': file.type || 'application/octet-stream',
-              'X-File-Name': encodeURIComponent(file.name),
-            },
-            body: file, // ← stream directly, no FormData wrapper
+      const n = picked.length
+      for (let i = 0; i < n; i++) {
+        const file = picked[i]
+        const url = `/api/assignments/upload?assignmentId=${encodeURIComponent(assignmentId)}&fileName=${encodeURIComponent(file.name)}&mimeType=${encodeURIComponent(file.type || '')}`
+        const headers = {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+        }
+
+        setUploadUi({
+          fileLabel: file.name,
+          fileIndex: i + 1,
+          fileTotal: n,
+          overallPercent: Math.round((i / n) * UPLOAD_PROGRESS_MAX_IN_FLIGHT),
+        })
+
+        const res = await postFileWithRetry(
+          url,
+          file,
+          headers,
+          (pe) => {
+            const rawPct =
+              pe.percent != null
+                ? pe.percent
+                : file.size > 0
+                  ? Math.round((pe.loaded / file.size) * 100)
+                  : 0
+            const filePct = Math.min(UPLOAD_PROGRESS_MAX_IN_FLIGHT, rawPct)
+            const base = (i / n) * UPLOAD_PROGRESS_MAX_IN_FLIGHT
+            const span = (1 / n) * UPLOAD_PROGRESS_MAX_IN_FLIGHT
+            const overall = Math.min(
+              UPLOAD_PROGRESS_MAX_IN_FLIGHT,
+              Math.round(base + (filePct / 100) * span),
+            )
+            setUploadUi({
+              fileLabel: file.name,
+              fileIndex: i + 1,
+              fileTotal: n,
+              overallPercent: overall,
+            })
           },
           { retries: 4, baseDelayMs: 700 },
         )
-        const payload = (await res.json().catch(() => ({}))) as { error?: string }
+
+        let payload: { error?: string } = {}
+        try {
+          payload = JSON.parse(res.bodyText || '{}') as { error?: string }
+        } catch {
+          payload = {}
+        }
         if (!res.ok) {
-          reportIssue('Assignment upload', `${file.name}: ${payload.error ?? `Upload failed (HTTP ${res.status})`}`)
+          reportIssue(
+            'Assignment upload',
+            `${file.name}: ${payload.error ?? `Upload failed (HTTP ${res.status})`}`,
+          )
           return
         }
       }
-  
+
+      const lastFile = picked[n - 1]
+      setUploadUi({
+        fileLabel: lastFile.name,
+        fileIndex: n,
+        fileTotal: n,
+        overallPercent: 100,
+      })
+
       await queryClient.invalidateQueries({ queryKey: queryKeys.assignmentSubmission({ assignmentId }) })
+      await new Promise((r) => setTimeout(r, 450))
   
     } catch (e) {
       reportIssue('Assignment upload', getFetchErrorMessage(e))
     } finally {
       setUploading(false)
+      setUploadUi(null)
     }
   }
 
@@ -368,17 +430,58 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
       </div>
 
       {canEdit && (
-        <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition">
-          {uploading ? (
-            <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
+        <label
+          className={`border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center transition ${
+            uploading ? 'pointer-events-none border-blue-200 bg-blue-50/40' : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50/50'
+          }`}
+        >
+          {uploading && uploadUi ? (
+            <>
+              <p className="text-sm font-semibold text-slate-800 mb-3">Uploading…</p>
+              <div
+                className="w-full max-w-xs mb-2"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={uploadUi.overallPercent}
+                aria-label={`Upload progress ${uploadUi.overallPercent} percent`}
+              >
+                <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-[width] duration-200 ease-out"
+                    style={{ width: `${uploadUi.overallPercent}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-lg font-bold tabular-nums text-blue-700">{uploadUi.overallPercent}%</p>
+              <p
+                className="text-xs text-slate-500 mt-1 text-center max-w-full px-2 truncate"
+                title={`${uploadUi.fileLabel} — file ${uploadUi.fileIndex} of ${uploadUi.fileTotal}`}
+              >
+                {uploadUi.fileLabel}
+                <span className="text-slate-400">
+                  {' '}
+                  · File {uploadUi.fileIndex} of {uploadUi.fileTotal}
+                </span>
+              </p>
+            </>
+          ) : uploading ? (
+            <>
+              <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
+              <p className="text-slate-600 font-medium text-sm text-center">Preparing upload…</p>
+            </>
           ) : (
-            <Upload className="h-8 w-8 text-slate-300 mb-2" />
+            <>
+              <Upload className="h-8 w-8 text-slate-300 mb-2" />
+              <p className="text-slate-600 font-medium text-sm text-center">Add files</p>
+            </>
           )}
-          <p className="text-slate-600 font-medium text-sm text-center">Add files</p>
-          <p className="text-slate-400 text-xs mt-1 text-center">
-            PDF, Word, Excel, CSV, images, MP4 · Up to {MAX_FILES_PER_SUBMISSION} files ·{' '}
-            {Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB each
-          </p>
+          {!uploading && (
+            <p className="text-slate-400 text-xs mt-1 text-center">
+              PDF, Word, Excel, CSV, images, MP4 · Up to {MAX_FILES_PER_SUBMISSION} files ·{' '}
+              {Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB each
+            </p>
+          )}
           <input
             type="file"
             multiple
