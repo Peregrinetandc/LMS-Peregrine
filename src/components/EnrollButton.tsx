@@ -1,27 +1,54 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { createClient } from '@/utils/supabase/client'
 import { Button } from '@/components/ui/button'
 
+function isAlreadyEnrolledError(error: { code?: string; message?: string }): boolean {
+  if (error.code === '23505') return true
+  const m = (error.message ?? '').toLowerCase()
+  return m.includes('duplicate') || m.includes('unique constraint') || m.includes('already exists')
+}
+
 export default function EnrollButton({ courseId }: { courseId: string }) {
   const [loading, setLoading] = useState(false)
+  const busyRef = useRef(false)
   const queryClient = useQueryClient()
+  const router = useRouter()
 
   const handleEnroll = async () => {
+    if (busyRef.current) return
+    busyRef.current = true
     setLoading(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('Sign in required', { description: 'Log in to enroll in this course.' })
+        return
+      }
 
-    await supabase.from('enrollments').insert({
-      course_id: courseId,
-      learner_id: user.id,
-    })
+      const { error } = await supabase.from('enrollments').insert({
+        course_id: courseId,
+        learner_id: user.id,
+      })
 
-    setLoading(false)
-    await queryClient.invalidateQueries({ queryKey: ['courses', 'catalog'] })
+      if (error && !isAlreadyEnrolledError(error)) {
+        toast.error('Could not enroll', { description: error.message })
+        return
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['courses', 'catalog'] })
+      await router.refresh()
+    } finally {
+      busyRef.current = false
+      setLoading(false)
+    }
   }
 
   return (
