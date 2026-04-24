@@ -35,7 +35,10 @@ export async function POST(req: Request) {
   // quiz_time_limit_minutes: optional future server-side late-submit rejection; v1 timer is browser-only.
   const { data: mod, error: modErr } = await supabase
     .from('modules')
-    .select('id, type, course_id, quiz_passing_pct, quiz_allow_retest, quiz_time_limit_minutes')
+    .select(`
+      id, type, course_id,
+      module_quiz_settings ( quiz_passing_pct, quiz_allow_retest, quiz_time_limit_minutes )
+    `)
     .eq('id', moduleId)
     .single()
 
@@ -137,8 +140,14 @@ export async function POST(req: Request) {
     })
   }
 
+  const quizSettings = (
+    (mod.module_quiz_settings as { quiz_passing_pct?: number; quiz_allow_retest?: boolean }[] | null)?.[0] ??
+    (mod.module_quiz_settings as { quiz_passing_pct?: number; quiz_allow_retest?: boolean } | null) ??
+    null
+  )
+
   const pct = maxScore > 0 ? Math.round((score * 100) / maxScore) : 0
-  const passing = mod.quiz_passing_pct ?? 60
+  const passing = quizSettings?.quiz_passing_pct ?? 60
   const passed = maxScore > 0 && pct >= passing
 
   const { data: existingBest, error: existingErr } = await supabase
@@ -155,7 +164,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: existingErr.message }, { status: 500 })
   }
 
-  const allowRetest = (mod.quiz_allow_retest as boolean | null) ?? true
+  const allowRetest = quizSettings?.quiz_allow_retest ?? true
   if (!allowRetest && existingBest) {
     return NextResponse.json(
       { error: 'Retest is disabled for this quiz by your instructor.' },

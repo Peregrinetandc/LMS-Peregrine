@@ -80,6 +80,7 @@ async function uploadFileToDriveFolder(params: {
   mimeType: string
   folderIdEnvVar: 'GOOGLE_DRIVE_ASSIGNMENTS_FOLDER_ID' | 'GOOGLE_DRIVE_THUMBNAILS_FOLDER_ID'
   folderNameForError: string
+  makePublicRead?: boolean
 }): Promise<{ fileId: string; webViewLink: string }> {
   const folderId = process.env[params.folderIdEnvVar]
   if (!folderId?.trim()) {
@@ -112,6 +113,17 @@ async function uploadFileToDriveFolder(params: {
     const fileId = created.data.id
     if (!fileId) {
       throw new Error('Drive did not return a file id')
+    }
+
+    if (params.makePublicRead) {
+      await drive.permissions.create({
+        fileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+        supportsAllDrives: true,
+      })
     }
 
     let webViewLink = created.data.webViewLink
@@ -166,6 +178,7 @@ export async function uploadCourseThumbnailToDrive(params: {
     ...params,
     folderIdEnvVar: 'GOOGLE_DRIVE_THUMBNAILS_FOLDER_ID',
     folderNameForError: 'Thumbnails',
+    makePublicRead: true,
   })
 }
 

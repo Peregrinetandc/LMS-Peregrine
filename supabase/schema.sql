@@ -127,27 +127,97 @@ create table public.modules (
   type             module_type not null,
   title            varchar(200) not null,
   description      text,
-  content_url      text,
-  session_location text,
   sort_order       integer not null default 0,
   week_index       integer not null default 1 check (week_index >= 1),
   available_from   timestamptz,
   is_sequential    boolean not null default false,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create table public.module_content (
+  module_id uuid primary key references public.modules(id) on delete cascade,
+  content_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.module_session (
+  module_id uuid primary key references public.modules(id) on delete cascade,
+  session_location text,
   session_start_at timestamptz,
-  session_end_at   timestamptz,
+  session_end_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint module_session_time_check
+    check (session_end_at is null or session_start_at is null or session_end_at >= session_start_at)
+);
+
+create table public.module_quiz_settings (
+  module_id uuid primary key references public.modules(id) on delete cascade,
   quiz_passing_pct smallint not null default 60
     check (quiz_passing_pct >= 0 and quiz_passing_pct <= 100),
   quiz_allow_retest boolean not null default true,
   quiz_time_limit_minutes smallint
-    null
-    check (
-      quiz_time_limit_minutes is null
-      or (quiz_time_limit_minutes >= 1 and quiz_time_limit_minutes <= 1440)
-    ),
+    check (quiz_time_limit_minutes is null or (quiz_time_limit_minutes >= 1 and quiz_time_limit_minutes <= 1440)),
   quiz_randomize_questions boolean not null default false,
-  created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
+
+create index modules_course_sort_idx
+  on public.modules (course_id, sort_order, id);
+create index modules_course_week_sort_idx
+  on public.modules (course_id, week_index, sort_order, id);
+create index modules_course_type_idx
+  on public.modules (course_id, type, sort_order, id);
+
+create or replace function public.ensure_module_subtype_rows()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.type in ('video', 'document', 'live_session') then
+    insert into public.module_content (module_id, content_url)
+    values (new.id, null)
+    on conflict (module_id) do nothing;
+  else
+    delete from public.module_content where module_id = new.id;
+  end if;
+
+  if new.type in ('live_session', 'offline_session') then
+    insert into public.module_session (module_id, session_location, session_start_at, session_end_at)
+    values (new.id, null, null, null)
+    on conflict (module_id) do nothing;
+  else
+    delete from public.module_session where module_id = new.id;
+  end if;
+
+  if new.type in ('quiz', 'mcq') then
+    insert into public.module_quiz_settings (
+      module_id,
+      quiz_passing_pct,
+      quiz_allow_retest,
+      quiz_time_limit_minutes,
+      quiz_randomize_questions
+    )
+    values (new.id, 60, true, null, false)
+    on conflict (module_id) do nothing;
+  else
+    delete from public.module_quiz_settings where module_id = new.id;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger trg_ensure_module_subtype_rows
+after insert or update of type
+on public.modules
+for each row
+execute function public.ensure_module_subtype_rows();
 
 -- External resource links (shared description on modules.description)
 create table public.module_external_links (
@@ -500,6 +570,9 @@ alter table public.departments enable row level security;
 alter table public.courses enable row level security;
 alter table public.sections enable row level security;
 alter table public.modules enable row level security;
+alter table public.module_content enable row level security;
+alter table public.module_session enable row level security;
+alter table public.module_quiz_settings enable row level security;
 alter table public.enrollments enable row level security;
 alter table public.assignments enable row level security;
 alter table public.submissions enable row level security;
@@ -633,6 +706,96 @@ create policy "Admins manage all assignments"
   to authenticated
   using (public.is_admin())
   with check (public.is_admin());
+
+create policy "View module content with modules"
+  on public.module_content for select to authenticated
+  using (
+    exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_content.module_id
+        and (c.status = 'published' or c.instructor_id = auth.uid() or public.is_admin())
+    )
+  );
+
+create policy "Staff manage module content"
+  on public.module_content for all to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_content.module_id and c.instructor_id = auth.uid()
+    )
+  )
+  with check (
+    public.is_admin()
+    or exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_content.module_id and c.instructor_id = auth.uid()
+    )
+  );
+
+create policy "View module sessions with modules"
+  on public.module_session for select to authenticated
+  using (
+    exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_session.module_id
+        and (c.status = 'published' or c.instructor_id = auth.uid() or public.is_admin())
+    )
+  );
+
+create policy "Staff manage module sessions"
+  on public.module_session for all to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_session.module_id and c.instructor_id = auth.uid()
+    )
+  )
+  with check (
+    public.is_admin()
+    or exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_session.module_id and c.instructor_id = auth.uid()
+    )
+  );
+
+create policy "View module quiz settings with modules"
+  on public.module_quiz_settings for select to authenticated
+  using (
+    exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_quiz_settings.module_id
+        and (c.status = 'published' or c.instructor_id = auth.uid() or public.is_admin())
+    )
+  );
+
+create policy "Staff manage module quiz settings"
+  on public.module_quiz_settings for all to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_quiz_settings.module_id and c.instructor_id = auth.uid()
+    )
+  )
+  with check (
+    public.is_admin()
+    or exists (
+      select 1 from public.modules m
+      join public.courses c on c.id = m.course_id
+      where m.id = module_quiz_settings.module_id and c.instructor_id = auth.uid()
+    )
+  );
 
 -- module_external_links
 create policy "View external links with modules"

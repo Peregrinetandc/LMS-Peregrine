@@ -16,6 +16,7 @@ import { firstEmbeddedAssignment } from '@/lib/embedded-assignment'
 import { formatLocalDisplay } from '@/lib/timestamp'
 import { isLessonPageDiagnosticsEnabled } from '@/lib/lesson-page-diagnostics'
 import ModuleLessonDiagnostics from './ModuleLessonDiagnostics'
+import { getModuleContentUrl, getModuleQuizSettings, getModuleSessionFields } from '@/lib/module-subtypes'
 
 function sortNested<T extends { sort_order?: number }>(arr: T[] | null | undefined): T[] {
   return [...(arr ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -47,9 +48,12 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
     .from('modules')
     .select(
       `
-      id, title, type, week_index, description, content_url, session_location, available_from,
-      session_start_at, session_end_at, quiz_passing_pct, quiz_allow_retest,
-      quiz_time_limit_minutes, quiz_randomize_questions,
+      id, title, type, week_index, description, available_from,
+      module_content ( content_url ),
+      module_session ( session_location, session_start_at, session_end_at ),
+      module_quiz_settings (
+        quiz_passing_pct, quiz_allow_retest, quiz_time_limit_minutes, quiz_randomize_questions
+      ),
       module_external_links ( id, label, url, sort_order ),
       quiz_questions ( id, prompt, sort_order, quiz_options ( id, label, is_correct, sort_order ) ),
       assignments(id, description, max_score, passing_score, deadline_at, allow_late)
@@ -88,10 +92,15 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
   const assignmentRow = firstEmbeddedAssignment(mod.assignments)
   const secondaryErrors: string[] = []
 
+  const moduleRecord = mod as Record<string, unknown>
+  const contentUrl = getModuleContentUrl(moduleRecord)
+  const sessionFields = getModuleSessionFields(moduleRecord)
+  const quizSettings = getModuleQuizSettings(moduleRecord)
+
   const passingPct =
-    typeof mod.quiz_passing_pct === 'number'
-      ? mod.quiz_passing_pct
-      : parseInt(String(mod.quiz_passing_pct ?? 60), 10) || 60
+    typeof quizSettings.quiz_passing_pct === 'number'
+      ? quizSettings.quiz_passing_pct
+      : parseInt(String(quizSettings.quiz_passing_pct ?? 60), 10) || 60
 
   const rawLinks = mod.module_external_links as
     | { id: string; label: string | null; url: string; sort_order: number }[]
@@ -121,13 +130,13 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
   const randomizeQuiz =
     mod.type === 'mcq' &&
     !!enrollment &&
-    !!(mod.quiz_randomize_questions as boolean | null | undefined)
+    !!quizSettings.quiz_randomize_questions
 
   if (randomizeQuiz && quizForLearner.length > 1) {
     quizForLearner = shuffleDeterministic(quizForLearner, `${moduleId}:${user.id}`)
   }
 
-  const rawQuizTlim = mod.quiz_time_limit_minutes
+  const rawQuizTlim = quizSettings.quiz_time_limit_minutes
   const quizTimeLimitResolved =
     mod.type === 'mcq' &&
     rawQuizTlim != null &&
@@ -318,7 +327,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
         Week {mod.week_index ?? 1}
       </p>
-      {mod.type === 'video' && mod.content_url && (
+      {mod.type === 'video' && contentUrl && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="lg:text-lg text-base font-bold text-slate-900">{mod.title}</h2>
@@ -331,7 +340,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               {mod.description}
             </div>
           )}
-          <VideoModule key={mod.id} moduleId={mod.id} contentUrl={mod.content_url}/>
+          <VideoModule key={mod.id} moduleId={mod.id} contentUrl={contentUrl}/>
         </div>
       )}
 
@@ -416,34 +425,34 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               </span>
             </div>
           )}
-          {(mod.session_start_at || mod.session_end_at) && (
+          {(sessionFields.session_start_at || sessionFields.session_end_at) && (
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Schedule</p>
               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {mod.session_start_at && (
+                {sessionFields.session_start_at && (
                   <div className="rounded-lg border border-purple-200 bg-purple-50/60 px-3 py-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-700">Starts</p>
                     <p className="mt-1 inline-flex items-start gap-2 text-sm text-slate-800">
                       <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
-                      <span>{new Date(mod.session_start_at).toLocaleString()}</span>
+                      <span>{new Date(sessionFields.session_start_at).toLocaleString()}</span>
                     </p>
                   </div>
                 )}
-                {mod.session_end_at && (
+                {sessionFields.session_end_at && (
                   <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">Ends</p>
                     <p className="mt-1 inline-flex items-start gap-2 text-sm text-slate-800">
                       <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
-                      <span>{new Date(mod.session_end_at).toLocaleString()}</span>
+                      <span>{new Date(sessionFields.session_end_at).toLocaleString()}</span>
                     </p>
                   </div>
                 )}
               </div>
             </div>
           )}
-          {mod.content_url && (
+          {contentUrl && (
             <a
-              href={mod.content_url}
+              href={contentUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 font-semibold text-white transition hover:bg-indigo-700"
@@ -492,35 +501,35 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               </div>
             )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {mod.session_location && (
+            {sessionFields.session_location && (
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Location</p>
                 <p className="mt-1 inline-flex items-start gap-2 text-sm font-medium text-slate-800">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                  <span>{mod.session_location}</span>
+                  <span>{sessionFields.session_location}</span>
                 </p>
               </div>
             )}
 
-            {(mod.session_start_at || mod.session_end_at) && (
+            {(sessionFields.session_start_at || sessionFields.session_end_at) && (
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Schedule</p>
                 <div className="mt-2 grid grid-cols-1 gap-2">
-                  {mod.session_start_at && (
+                  {sessionFields.session_start_at && (
                     <div className="rounded-lg border border-purple-200 bg-purple-50/60 px-3 py-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-700">Starts</p>
                       <p className="mt-1 inline-flex items-start gap-2 text-sm text-slate-800">
                         <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
-                        <span>{new Date(mod.session_start_at).toLocaleString()}</span>
+                        <span>{new Date(sessionFields.session_start_at).toLocaleString()}</span>
                       </p>
                     </div>
                   )}
-                  {mod.session_end_at && (
+                  {sessionFields.session_end_at && (
                     <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">Ends</p>
                       <p className="mt-1 inline-flex items-start gap-2 text-sm text-slate-800">
                         <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
-                        <span>{new Date(mod.session_end_at).toLocaleString()}</span>
+                        <span>{new Date(sessionFields.session_end_at).toLocaleString()}</span>
                       </p>
                     </div>
                   )}
@@ -539,7 +548,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-700">
                 MCQ Exam
               </span>
-              {!((mod.quiz_allow_retest as boolean | null) ?? true) && (
+              {!quizSettings.quiz_allow_retest && (
                 <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
                   Retest disabled
                 </span>
@@ -579,7 +588,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               moduleId={mod.id}
               questions={quizForLearner}
               initialResult={quizInitialResult}
-              allowRetest={(mod.quiz_allow_retest as boolean | null) ?? true}
+              allowRetest={quizSettings.quiz_allow_retest}
               introText={mod.description ?? undefined}
               timeLimitMinutes={quizTimeLimitResolved}
               questionsRandomized={randomizeQuiz}

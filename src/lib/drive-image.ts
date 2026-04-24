@@ -10,6 +10,10 @@ function extractDriveFileId(url: string): string | null {
   const idQueryMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/)
   if (idQueryMatch?.[1]) return idQueryMatch[1]
 
+  // Generic /d/<id> shape used by some Google endpoints
+  const genericDMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/)
+  if (genericDMatch?.[1]) return genericDMatch[1]
+
   return null
 }
 

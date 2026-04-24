@@ -52,6 +52,7 @@ import { GENERAL_DEPARTMENT_NAME } from '@/lib/course-departments'
 import { toast } from 'sonner'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 import { firstEmbeddedAssignment } from '@/lib/embedded-assignment'
+import { getModuleContentUrl, getModuleQuizSettings, getModuleSessionFields } from '@/lib/module-subtypes'
 
 type ModuleType =
   | 'video'
@@ -152,40 +153,72 @@ function buildModuleRow(
     type: mod.type,
     title: mod.title,
     description: mod.description.trim() || null,
-    content_url:
-      mod.type === 'video' || mod.type === 'live_session'
-        ? mod.content_url?.trim() || null
-        : null,
-    quiz_passing_pct:
-      mod.type === 'mcq'
-        ? Math.min(100, Math.max(0, Math.trunc(Number(mod.quiz_passing_pct)) || 60))
-        : 60,
-    quiz_allow_retest: mod.type === 'mcq' ? !!mod.quiz_allow_retest : true,
-    quiz_time_limit_minutes:
-      mod.type === 'mcq'
-        ? (() => {
-            const v = mod.quiz_time_limit_minutes
-            if (v == null) return null
-            const n = Math.trunc(Number(v))
-            if (!Number.isFinite(n) || n < 1) return null
-            return Math.min(1440, n) as number
-          })()
-        : null,
-    quiz_randomize_questions: mod.type === 'mcq' ? !!mod.quiz_randomize_questions : false,
-    session_location:
-      mod.type === 'offline_session' && mod.session_location.trim()
-        ? mod.session_location.trim()
-        : null,
     sort_order: sortIndex,
     week_index: weekIndex,
     available_from: availableFrom,
-    session_start_at: mod.session_start_at
-      ? fromDatetimeLocal(mod.session_start_at)
-      : null,
-    session_end_at: mod.session_end_at
-      ? fromDatetimeLocal(mod.session_end_at)
-      : null,
   }
+}
+
+function buildModuleSubtypePayloads(mod: ModuleItem, moduleId: string) {
+  const quizTimeLimit =
+    mod.type === 'mcq'
+      ? (() => {
+          const v = mod.quiz_time_limit_minutes
+          if (v == null) return null
+          const n = Math.trunc(Number(v))
+          if (!Number.isFinite(n) || n < 1) return null
+          return Math.min(1440, n) as number
+        })()
+      : null
+
+  return {
+    content:
+      mod.type === 'video' || mod.type === 'live_session' || mod.type === 'document'
+        ? { module_id: moduleId, content_url: mod.content_url.trim() || null }
+        : null,
+    session:
+      mod.type === 'live_session' || mod.type === 'offline_session'
+        ? {
+            module_id: moduleId,
+            session_location: mod.session_location.trim() || null,
+            session_start_at: mod.session_start_at ? fromDatetimeLocal(mod.session_start_at) : null,
+            session_end_at: mod.session_end_at ? fromDatetimeLocal(mod.session_end_at) : null,
+          }
+        : null,
+    quiz:
+      mod.type === 'mcq' || mod.type === 'quiz'
+        ? {
+            module_id: moduleId,
+            quiz_passing_pct: Math.min(100, Math.max(0, Math.trunc(Number(mod.quiz_passing_pct)) || 60)),
+            quiz_allow_retest: !!mod.quiz_allow_retest,
+            quiz_time_limit_minutes: quizTimeLimit,
+            quiz_randomize_questions: !!mod.quiz_randomize_questions,
+          }
+        : null,
+  }
+}
+
+async function syncModuleSubtypes(
+  supabase: ReturnType<typeof createClient>,
+  mod: ModuleItem,
+  moduleId: string,
+) {
+  const payloads = buildModuleSubtypePayloads(mod, moduleId)
+
+  const contentRes = payloads.content
+    ? await supabase.from('module_content').upsert(payloads.content, { onConflict: 'module_id' })
+    : await supabase.from('module_content').delete().eq('module_id', moduleId)
+  if (contentRes.error) throw contentRes.error
+
+  const sessionRes = payloads.session
+    ? await supabase.from('module_session').upsert(payloads.session, { onConflict: 'module_id' })
+    : await supabase.from('module_session').delete().eq('module_id', moduleId)
+  if (sessionRes.error) throw sessionRes.error
+
+  const quizRes = payloads.quiz
+    ? await supabase.from('module_quiz_settings').upsert(payloads.quiz, { onConflict: 'module_id' })
+    : await supabase.from('module_quiz_settings').delete().eq('module_id', moduleId)
+  if (quizRes.error) throw quizRes.error
 }
 
 async function syncAssignmentForModule(
@@ -444,14 +477,19 @@ function mapDbModuleToItem(
     })),
   }))
 
-  const qpct = (row.quiz_passing_pct as number | undefined) ?? 60
-  const qRetest = (row.quiz_allow_retest as boolean | undefined) ?? true
-  const rawTlim = row.quiz_time_limit_minutes as number | null | undefined
+  const subtypeRow = row as Record<string, unknown>
+  const quizSettings = getModuleQuizSettings(subtypeRow)
+  const sessionFields = getModuleSessionFields(subtypeRow)
+  const contentUrl = getModuleContentUrl(subtypeRow)
+
+  const qpct = quizSettings.quiz_passing_pct ?? 60
+  const qRetest = quizSettings.quiz_allow_retest ?? true
+  const rawTlim = quizSettings.quiz_time_limit_minutes
   const qTimeLim =
     rawTlim != null && Number.isFinite(Number(rawTlim))
       ? Math.min(1440, Math.max(1, Math.trunc(Number(rawTlim))))
       : null
-  const qRand = !!(row.quiz_randomize_questions as boolean | undefined)
+  const qRand = !!quizSettings.quiz_randomize_questions
 
   return {
     id,
@@ -463,13 +501,13 @@ function mapDbModuleToItem(
     available_from:
       unlockMode === 'manual' && avail ? toDatetimeLocalValue(avail) : '',
     description: (row.description as string) ?? '',
-    content_url: (row.content_url as string) ?? '',
-    session_location: (row.session_location as string) ?? '',
-    session_start_at: row.session_start_at
-      ? toDatetimeLocalValue(row.session_start_at as string)
+    content_url: contentUrl,
+    session_location: sessionFields.session_location,
+    session_start_at: sessionFields.session_start_at
+      ? toDatetimeLocalValue(sessionFields.session_start_at)
       : '',
-    session_end_at: row.session_end_at
-      ? toDatetimeLocalValue(row.session_end_at as string)
+    session_end_at: sessionFields.session_end_at
+      ? toDatetimeLocalValue(sessionFields.session_end_at)
       : '',
     max_score: asn?.max_score ?? 100,
     passing_score: asn?.passing_score ?? 60,
@@ -609,9 +647,12 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         .from('modules')
         .select(
           `
-          id, type, title, week_index, description, content_url, session_location,
-          available_from, session_start_at, session_end_at, sort_order, quiz_passing_pct,
-          quiz_allow_retest, quiz_time_limit_minutes, quiz_randomize_questions,
+          id, type, title, week_index, description, available_from, sort_order,
+          module_content ( content_url ),
+          module_session ( session_location, session_start_at, session_end_at ),
+          module_quiz_settings (
+            quiz_passing_pct, quiz_allow_retest, quiz_time_limit_minutes, quiz_randomize_questions
+          ),
           module_external_links ( label, url, sort_order ),
           quiz_questions ( id, prompt, sort_order, quiz_options ( id, label, is_correct, sort_order ) ),
           assignments ( id, description, max_score, passing_score, deadline_at )
@@ -992,7 +1033,28 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
   }
 
   const logSaveFailure = (label: string, err: unknown) => {
+    if (err && typeof err === 'object') {
+      const asRecord = err as Record<string, unknown>
+      const normalized = {
+        message: asRecord.message,
+        code: asRecord.code,
+        details: asRecord.details,
+        hint: asRecord.hint,
+        status: asRecord.status,
+        name: asRecord.name,
+      }
+      console.error(`[CourseBuilder] ${label}`, normalized, err)
+      return
+    }
     console.error(`[CourseBuilder] ${label}`, err)
+  }
+
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (err && typeof err === 'object' && 'message' in err) {
+      const message = (err as { message?: unknown }).message
+      if (typeof message === 'string' && message.trim()) return message
+    }
+    return fallback
   }
 
   const handleSave = async (publish: boolean) => {
@@ -1006,8 +1068,10 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
+      const message = 'You are not signed in. Please log in and try again.'
       logSaveFailure('save: not authenticated', new Error('No session'))
-      setActionError('Something went wrong.')
+      setActionError(message)
+      toast.error(message)
       setSaving(false)
       return
     }
@@ -1049,7 +1113,9 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
 
         if (upErr) {
           logSaveFailure('course update', upErr)
-          setActionError('Something went wrong.')
+          const message = getErrorMessage(upErr, 'Could not update course.')
+          setActionError(message)
+          toast.error(message)
           return
         }
 
@@ -1110,6 +1176,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
                 logSaveFailure('module update', mErr)
                 throw new Error('Failed to update lesson.')
               }
+              await syncModuleSubtypes(supabase, mod, mod.dbId)
               modulesToSync.push({
                 moduleId: mod.dbId,
                 moduleType: mod.type,
@@ -1145,6 +1212,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
             }
             // Update the local module with the new dbId to prevent duplicate inserts on next save
             mod.dbId = dbMod.id
+            await syncModuleSubtypes(supabase, mod, dbMod.id)
             await syncAssignmentForModule(supabase, mod, dbMod.id)
             modulesToSync.push({
               moduleId: dbMod.id,
@@ -1229,6 +1297,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
           throw new Error('Failed to create lesson for the new course.')
         }
         mod.dbId = dbMod.id
+        await syncModuleSubtypes(supabase, mod, dbMod.id)
         await syncAssignmentForModule(supabase, mod, dbMod.id)
         modulesToSync.push({
           moduleId: dbMod.id,
@@ -1260,7 +1329,9 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       setTimeout(() => router.push(`/courses/${course.id}`), 1200)
     } catch (e: unknown) {
       logSaveFailure('save (exception)', e)
-      setActionError('Something went wrong. Changes could not be saved.')
+      const message = getErrorMessage(e, 'Something went wrong. Changes could not be saved.')
+      setActionError(message)
+      toast.error(message)
       
       // Rollback to backup state
       setModules(backupState.modules)
