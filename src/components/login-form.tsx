@@ -15,19 +15,26 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
+import Link from "next/link"
 import { login } from "@/app/login/actions"
 import LoginSubmitButton from "@/app/login/LoginSubmitButton"
 import { AlertCircle } from "lucide-react"
 
 interface LoginFormProps extends React.ComponentProps<"div"> {
   errorMessage?: string | null
+  redirectTo?: string
 }
 
 export function LoginForm({
   className,
   errorMessage,
+  redirectTo,
   ...props
 }: LoginFormProps) {
+  const signupHref = redirectTo
+    ? `/signup?redirect=${encodeURIComponent(redirectTo)}`
+    : '/signup'
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -42,6 +49,7 @@ export function LoginForm({
         </CardHeader>
         <CardContent>
           <form action={login}>
+            <input type="hidden" name="redirect" value={redirectTo ?? ''} />
             <FieldGroup>
 
               {errorMessage ? (
@@ -77,6 +85,12 @@ export function LoginForm({
                 <LoginSubmitButton />
               </Field>
 
+              <p className="text-center text-sm text-muted-foreground">
+                Don&apos;t have an account?{' '}
+                <Link href={signupHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                  Create one
+                </Link>
+              </p>
             </FieldGroup>
           </form>
         </CardContent>

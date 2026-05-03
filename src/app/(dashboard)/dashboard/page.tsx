@@ -30,7 +30,7 @@ type LearnerSummary = {
     completed_modules: number
     progress: number
   }[]
-  streak: number
+  streak: number | null
   due_assignments: {
     assignment_id: string
     module_id: string
@@ -241,7 +241,8 @@ function LearnerDashboard({
   name: string
   summary: LearnerSummary
 }) {
-  const { enrolled_courses, streak, due_assignments } = summary
+  const { enrolled_courses, streak: rawStreak, due_assignments } = summary
+  const streak = rawStreak ?? 0
 
   const metrics: MetricCard[] = [
     {

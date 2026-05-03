@@ -32,10 +32,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
-  // Step 1: Run all independent queries in parallel
-  const [courseResult, profileResult, modulesResult, enrollmentResult] = await Promise.all([
+  const isAuthenticated = !!user
+
+  // Queries that don't need auth
+  const [courseResult, modulesResult] = await Promise.all([
     supabase
       .from('courses')
       .select(`
@@ -45,34 +46,42 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       `)
       .eq('id', id)
       .single(),
-    supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
     supabase
       .from('modules')
       .select('id, title, type, available_from, is_sequential, sort_order, week_index')
       .eq('course_id', id)
       .order('sort_order', { ascending: true }),
-    supabase.from('enrollments').select('id').eq('course_id', id).eq('learner_id', user.id).maybeSingle(),
   ])
 
   const course = courseResult.data
   if (!course) notFound()
 
-  const isAdmin = profileResult.data?.role === ROLES.ADMIN
-  const isCourseInstructor = course.instructor_id === user.id
+  // Auth-dependent queries
+  let profileRole: string | null = null
+  let isEnrolled = false
+
+  if (user) {
+    const [profileResult, enrollmentResult] = await Promise.all([
+      supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+      supabase.from('enrollments').select('id').eq('course_id', id).eq('learner_id', user.id).maybeSingle(),
+    ])
+    profileRole = profileResult.data?.role ?? null
+    isEnrolled = !!enrollmentResult.data
+  }
+
+  const isAdmin = profileRole === ROLES.ADMIN
+  const isCourseInstructor = !!user && course.instructor_id === user.id
   const isCourseStaff = isCourseInstructor || isAdmin
   const canManageCourse = isCourseInstructor || isAdmin
-
-  const modules = modulesResult.data
-  const isEnrolled = !!enrollmentResult.data
 
   if (course.enrollment_type === 'invite_only' && !isCourseStaff && !isEnrolled) {
     redirect('/courses')
   }
 
+  const modules = modulesResult.data
   const sectionGroups = groupModulesByWeek(modules ?? [])
 
-  // Step 2: Module status RPC (depends on modules list + enrollment check)
-  const moduleUi = isEnrolled
+  const moduleUi = isEnrolled && user
     ? await getLearnerModuleStatusMap(
         supabase,
         id,
@@ -92,8 +101,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
 
   const completionPct = totalModules > 0 ? Math.round((completedModules * 100) / totalModules) : 0
 
-  // Step 3: Course completion check + auto-insert (depends on step 2)
-  let completionRow = isEnrolled
+  let completionRow = isEnrolled && user
     ? (
         await supabase
           .from('course_completions')
@@ -104,7 +112,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       ).data
     : null
 
-  if (isEnrolled && eligibleForCompletion && !completionRow?.completed_at) {
+  if (isEnrolled && user && eligibleForCompletion && !completionRow?.completed_at) {
     await supabase.from('course_completions').insert({
       course_id: id,
       learner_id: user.id,
@@ -172,7 +180,6 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       <CourseSyllabusAccordion weeks={syllabusWeeks} />
     )
 
-  /** Sits on the hero scrim — no box; photo uses white + shadow, panel strip uses theme text. */
   const renderCourseCodeThumbnailBadge = (surface: 'photo' | 'panel' = 'photo') => (
     <div
       className="pointer-events-none absolute bottom-2 left-3 z-[6] sm:bottom-3 sm:left-4"
@@ -289,6 +296,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
     ) : null
   }
 
+  const showEnrollButton = !isCourseStaff && !isEnrolled
+
   const mobileTitleBlock = (
     <div className="flex flex-col gap-2">
       <h1 className="font-heading text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
@@ -340,7 +349,9 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
 
-        {!isCourseStaff && !isEnrolled && showEnrollInline && <EnrollButton courseId={id} />}
+        {showEnrollButton && showEnrollInline && (
+          <EnrollButton courseId={id} isAuthenticated={isAuthenticated} />
+        )}
 
         {isCourseStaff && (
           <Alert className="border-blue-200 bg-blue-50/60">
@@ -374,8 +385,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         }
         syllabus={syllabusBody}
         stickyBottomBar={
-          !isCourseStaff && !isEnrolled ? (
-            <EnrollButton courseId={id} />
+          showEnrollButton ? (
+            <EnrollButton courseId={id} isAuthenticated={isAuthenticated} />
           ) : undefined
         }
       />

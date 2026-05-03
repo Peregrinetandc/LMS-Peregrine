@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/utils/supabase/client'
@@ -13,13 +13,26 @@ function isAlreadyEnrolledError(error: { code?: string; message?: string }): boo
   return m.includes('duplicate') || m.includes('unique constraint') || m.includes('already exists')
 }
 
-export default function EnrollButton({ courseId }: { courseId: string }) {
+export default function EnrollButton({
+  courseId,
+  isAuthenticated = true,
+}: {
+  courseId: string
+  isAuthenticated?: boolean
+}) {
   const [loading, setLoading] = useState(false)
   const busyRef = useRef(false)
   const queryClient = useQueryClient()
   const router = useRouter()
+  const pathname = usePathname()
 
   const handleEnroll = async () => {
+    if (!isAuthenticated) {
+      const redirectTo = encodeURIComponent(pathname)
+      router.push(`/signup?redirect=${redirectTo}`)
+      return
+    }
+
     if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
@@ -29,7 +42,8 @@ export default function EnrollButton({ courseId }: { courseId: string }) {
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) {
-        toast.error('Sign in required', { description: 'Log in to enroll in this course.' })
+        const redirectTo = encodeURIComponent(pathname)
+        router.push(`/signup?redirect=${redirectTo}`)
         return
       }
 
