@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { notFound, redirect } from 'next/navigation'
-import { Award, BookOpen, CalendarDays, Check, Info, User } from 'lucide-react'
+import { Award, BookOpen, CalendarDays, Check, IndianRupee, Info, User } from 'lucide-react'
 import EnrollButton from '@/components/EnrollButton'
 import CourseManageBar from '@/components/CourseManageBar'
 import { groupModulesByWeek } from '@/lib/course-modules'
@@ -27,6 +27,7 @@ import {
 } from '@/components/courses/course-syllabus-accordion'
 import { cn } from '@/lib/utils'
 import { unwrapSingle } from '@/lib/catalog-courses'
+import { finalPrice, formatINR } from '@/lib/course-price'
 
 export default async function CourseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -41,6 +42,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       .from('courses')
       .select(`
         id, instructor_id, course_code, title, description, thumbnail_url, starts_at, enrollment_type,
+        price, discount_percent,
         profiles:instructor_id ( full_name ),
         department:department_id ( id, name )
       `)
@@ -126,6 +128,10 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
 
   const instructorName =
     (course.profiles as { full_name?: string } | null)?.full_name ?? 'Unknown'
+
+  const coursePrice = Number((course as { price?: number | string }).price ?? 0) || 0
+  const courseDiscount = Number((course as { discount_percent?: number | string }).discount_percent ?? 0) || 0
+  const courseFinalPrice = finalPrice({ price: coursePrice, discount_percent: courseDiscount })
 
   const departmentName =
     unwrapSingle(
@@ -338,6 +344,32 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
               <p className="truncate text-sm font-semibold text-slate-900">{instructorName}</p>
             </div>
           </div>
+
+          <div className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 sm:col-span-2">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+              <IndianRupee className="size-4 text-blue-600" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Price</p>
+              {coursePrice <= 0 ? (
+                <p className="text-sm font-semibold text-emerald-700">Free</p>
+              ) : (
+                <p className="flex items-baseline gap-2">
+                  {courseDiscount > 0 && (
+                    <span className="text-xs text-slate-400 line-through">{formatINR(coursePrice)}</span>
+                  )}
+                  <span className="text-sm font-semibold text-slate-900">
+                    {formatINR(courseFinalPrice)}
+                  </span>
+                  {courseDiscount > 0 && (
+                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                      {Math.round(courseDiscount)}% off
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         {course.description && (
@@ -350,7 +382,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         )}
 
         {showEnrollButton && showEnrollInline && (
-          <EnrollButton courseId={id} isAuthenticated={isAuthenticated} />
+          <EnrollButton
+            courseId={id}
+            courseTitle={course.title}
+            price={coursePrice}
+            discountPercent={courseDiscount}
+            isAuthenticated={isAuthenticated}
+          />
         )}
 
         {isCourseStaff && (
@@ -386,7 +424,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         syllabus={syllabusBody}
         stickyBottomBar={
           showEnrollButton ? (
-            <EnrollButton courseId={id} isAuthenticated={isAuthenticated} />
+            <EnrollButton
+            courseId={id}
+            courseTitle={course.title}
+            price={coursePrice}
+            discountPercent={courseDiscount}
+            isAuthenticated={isAuthenticated}
+          />
           ) : undefined
         }
       />

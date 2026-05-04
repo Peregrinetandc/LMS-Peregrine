@@ -19,7 +19,7 @@ export default async function Home() {
   const { data } = await supabase
     .from('courses')
     .select(
-      'id, course_code, title, description, thumbnail_url, enrollment_type, created_at, profiles:instructor_id(full_name), department:department_id(id, name, sort_order)',
+      'id, course_code, title, description, thumbnail_url, enrollment_type, created_at, price, discount_percent, profiles:instructor_id(full_name), department:department_id(id, name, sort_order)',
     )
     .eq('status', 'published')
     .eq('enrollment_type', 'open')
@@ -35,6 +35,8 @@ export default async function Home() {
     thumbnail_url: (r.thumbnail_url as string | null) ?? null,
     enrollment_type: r.enrollment_type as string,
     created_at: r.created_at as string,
+    price: Number(r.price ?? 0),
+    discount_percent: Number(r.discount_percent ?? 0),
     profiles: unwrapSingle(r.profiles as { full_name?: string } | { full_name?: string }[] | null),
     department: unwrapSingle(r.department as { id: string; name: string; sort_order: number } | { id: string; name: string; sort_order: number }[] | null),
   }))

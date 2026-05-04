@@ -536,6 +536,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
     { id: string; name: string; sort_order: number }[]
   >([])
   const [departmentId, setDepartmentId] = useState('')
+  const [price, setPrice] = useState<string>('0')
+  const [discountPercent, setDiscountPercent] = useState<string>('0')
 
   const [modules, setModules] = useState<ModuleItem[]>([makeModule()])
   const [activeId, setActiveId] = useState<string>(modules[0]?.id ?? '')
@@ -620,7 +622,7 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       const { data: course, error: cErr } = await supabase
         .from('courses')
         .select(
-          'title, course_code, description, thumbnail_url, starts_at, enrollment_type, status, instructor_id, department_id'
+          'title, course_code, description, thumbnail_url, starts_at, enrollment_type, status, instructor_id, department_id, price, discount_percent'
         )
         .eq('id', courseId)
         .single()
@@ -642,6 +644,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       )
       setEnrollmentType((course.enrollment_type as 'open' | 'invite_only') ?? 'invite_only')
       setDepartmentId((course.department_id as string) ?? '')
+      setPrice(String((course as { price?: number }).price ?? 0))
+      setDiscountPercent(String((course as { discount_percent?: number }).discount_percent ?? 0))
 
       const { data: mods, error: mErr } = await supabase
         .from('modules')
@@ -685,6 +689,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
           enrollmentType: (course.enrollment_type as 'open' | 'invite_only') ?? 'invite_only',
           selectedInstructorId: (course.instructor_id as string) ?? '',
           departmentId: (course.department_id as string) ?? '',
+          price: String((course as { price?: number }).price ?? 0),
+          discountPercent: String((course as { discount_percent?: number }).discount_percent ?? 0),
           modules: loadedModules,
         }),
       )
@@ -753,6 +759,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
         enrollmentType,
         selectedInstructorId,
         departmentId,
+        price,
+        discountPercent,
         modules,
       }),
     [
@@ -764,6 +772,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       enrollmentType,
       selectedInstructorId,
       departmentId,
+      price,
+      discountPercent,
       modules,
     ],
   )
@@ -1089,10 +1099,14 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       enrollmentType,
       selectedInstructorId,
       departmentId,
+      price,
+      discountPercent,
     }
 
     try {
       const startsAtIso = fromDatetimeLocal(courseStartsAt)
+      const priceNumber = Math.max(0, Number(price) || 0)
+      const discountNumber = Math.max(0, Math.min(100, Math.round(Number(discountPercent) || 0)))
 
       if (courseId) {
         const updatePayload: Record<string, unknown> = {
@@ -1104,6 +1118,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
           status: publish ? 'published' : 'draft',
           enrollment_type: enrollmentType,
           department_id: departmentId,
+          price: priceNumber,
+          discount_percent: discountNumber,
         }
         if (isAdmin && selectedInstructorId) {
           updatePayload.instructor_id = selectedInstructorId
@@ -1261,6 +1277,8 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
           status: publish ? 'published' : 'draft',
           enrollment_type: enrollmentType,
           department_id: departmentId,
+          price: priceNumber,
+          discount_percent: discountNumber,
         })
         .select('id')
         .single()
@@ -1345,7 +1363,9 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
       setEnrollmentType(backupState.enrollmentType)
       setSelectedInstructorId(backupState.selectedInstructorId)
       setDepartmentId(backupState.departmentId)
-      
+      setPrice(backupState.price)
+      setDiscountPercent(backupState.discountPercent)
+
     } finally {
       setSaving(false)
     }
@@ -1488,6 +1508,49 @@ export default function CourseBuilder({ courseId }: { courseId?: string }) {
             placeholder="What will learners achieve in this course?"
             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Label>Course Price (₹)</Label>
+            <FieldInput
+              type="number"
+              min={0}
+              step={1}
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="0 for free"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Set to 0 to make this course free. Price is in Indian Rupees.
+            </p>
+          </div>
+          <div>
+            <Label>Discount (%)</Label>
+            <FieldInput
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={discountPercent}
+              onChange={(e) => setDiscountPercent(e.target.value)}
+              placeholder="0"
+              disabled={(Number(price) || 0) <= 0}
+            />
+            {(Number(price) || 0) > 0 ? (
+              <p className="text-xs text-slate-500 mt-1">
+                Learners see <span className="line-through">₹{Math.round(Number(price) || 0)}</span>{' '}
+                <span className="font-semibold text-emerald-700">
+                  ₹{Math.round(((Number(price) || 0) * (100 - Math.max(0, Math.min(100, Number(discountPercent) || 0)))) / 100)}
+                </span>
+                {(Number(discountPercent) || 0) > 0 && (
+                  <> ({Math.round(Number(discountPercent) || 0)}% off)</>
+                )}
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-700 mt-1">Free course — no payment required to enroll.</p>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

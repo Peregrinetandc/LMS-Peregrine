@@ -23,12 +23,15 @@ export type CatalogCourse = {
   thumbnail_url: string | null
   enrollment_type: string
   created_at: string
+  price: number
+  discount_percent: number
   profiles: unknown
   department: CatalogDepartment | null
 }
 
 const catalogSelect = `
   id, course_code, title, description, thumbnail_url, enrollment_type, created_at,
+  price, discount_percent,
   profiles:instructor_id ( full_name ),
   department:department_id ( id, name, sort_order )
 `
@@ -105,6 +108,8 @@ export async function fetchCatalogPage(
       thumbnail_url: (r.thumbnail_url as string | null) ?? null,
       enrollment_type: r.enrollment_type as string,
       created_at: r.created_at as string,
+      price: Number(r.price ?? 0),
+      discount_percent: Number(r.discount_percent ?? 0),
       profiles: unwrapSingle(
         r.profiles as { full_name?: string } | { full_name?: string }[] | null,
       ),

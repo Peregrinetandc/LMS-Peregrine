@@ -58,7 +58,7 @@ export default async function CoursesPage({
   ])
 
   return (
-    <div className="px-2 pb-8 pt-2 sm:px-0 sm:pb-10 sm:pt-0">
+    <div className="px-3 pb-10 pt-3 sm:px-0 sm:pb-10 sm:pt-0">
       <CourseCatalog
         key={`${page}-${q}-${departmentId}`}
         courses={catalogRes.courses}

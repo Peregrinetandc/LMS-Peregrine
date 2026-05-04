@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { EmptyState } from '@/components/ui/primitives'
 import { CATALOG_PAGE_SIZE, type CatalogCourse, type CatalogDepartment } from '@/lib/catalog-courses'
 import { queryKeys } from '@/lib/query/query-keys'
@@ -55,6 +55,13 @@ export function CourseCatalog({
   const router = useRouter()
   const [draftQ, setDraftQ] = useState(initialQ)
   const [draftDepartmentId, setDraftDepartmentId] = useState(initialDepartmentId)
+
+  useEffect(() => {
+    setDraftQ(initialQ)
+  }, [initialQ])
+  useEffect(() => {
+    setDraftDepartmentId(initialDepartmentId)
+  }, [initialDepartmentId])
 
   const params = useMemo(
     () => ({ q: initialQ.trim(), dept: initialDepartmentId.trim(), page: initialPage }),
@@ -108,6 +115,8 @@ export function CourseCatalog({
     router.push(query ? `/courses?${query}` : '/courses')
   }
 
+  const filtersActive = !!(initialQ.trim() || initialDepartmentId.trim())
+
   if (fetchError) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50/80 p-6 text-sm text-red-800">
@@ -117,21 +126,26 @@ export function CourseCatalog({
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/80 to-indigo-50/60 px-4 py-5 shadow-sm sm:px-6 sm:py-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-1">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-              Course catalog
-            </h1>
-            <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
+    <div className="space-y-4 sm:space-y-8">
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/80 to-indigo-50/60 px-3 py-3 shadow-sm sm:px-6 sm:py-6">
+        <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 max-w-2xl">
+            <div className="flex items-baseline justify-between gap-3 sm:block">
+              <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-2xl">
+                Course catalog
+              </h1>
+              <p className="shrink-0 text-[11px] font-medium text-slate-500 sm:hidden">{countLabel}</p>
+            </div>
+            <p className="hidden text-sm leading-relaxed text-slate-600 sm:mt-1 sm:block sm:text-base">
               Browse by department, search, and open a course. Results load in pages for speed.
             </p>
-            <p className="text-xs font-medium text-slate-500 sm:text-sm">{countLabel}</p>
+            <p className="hidden text-xs font-medium text-slate-500 sm:mt-1 sm:block sm:text-sm">
+              {countLabel}
+            </p>
           </div>
 
           <form
-            className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:max-w-xl"
+            className="flex w-full flex-col gap-2 sm:flex-row sm:items-end sm:gap-3 lg:max-w-xl"
             onSubmit={(e) => {
               e.preventDefault()
               navigate(1, draftQ, draftDepartmentId)
@@ -151,50 +165,71 @@ export function CourseCatalog({
                   type="search"
                   inputMode="search"
                   autoComplete="off"
-                  placeholder="Title, code, description…"
+                  enterKeyHint="search"
+                  placeholder="Search title, code…"
                   value={draftQ}
                   onChange={(e) => setDraftQ(e.target.value)}
-                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:min-h-11"
                 />
+                {draftQ ? (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setDraftQ('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                ) : null}
               </div>
             </div>
-            <div className="w-full sm:w-44">
-              <label htmlFor="course-catalog-dept" className="sr-only">
-                Department
-              </label>
-              <select
-                id="course-catalog-dept"
-                value={draftDepartmentId}
-                onChange={(e) => setDraftDepartmentId(e.target.value)}
-                className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            <div className="flex gap-2 sm:gap-3">
+              <div className="min-w-0 flex-1 sm:w-44 sm:flex-initial">
+                <label htmlFor="course-catalog-dept" className="sr-only">
+                  Department
+                </label>
+                <select
+                  id="course-catalog-dept"
+                  value={draftDepartmentId}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setDraftDepartmentId(next)
+                    navigate(1, draftQ, next)
+                  }}
+                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:min-h-11"
+                >
+                  <option value="">All departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={pending}
+                aria-label="Apply search"
+                className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60 sm:min-h-11"
               >
-                <option value="">All departments</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                <Search className="h-4 w-4 sm:hidden" aria-hidden />
+                <span className="hidden sm:inline">{pending ? 'Applying…' : 'Apply'}</span>
+              </button>
+              {filtersActive ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setDraftQ('')
+                    setDraftDepartmentId('')
+                    navigate(1, '', '')
+                  }}
+                  className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:min-h-11 sm:px-4"
+                >
+                  Clear
+                </button>
+              ) : null}
             </div>
-            <button
-              type="submit"
-              disabled={pending}
-              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              {pending ? 'Applying…' : 'Apply'}
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setDraftQ('')
-                setDraftDepartmentId('')
-                navigate(1, '', '')
-              }}
-              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              Clear
-            </button>
           </form>
         </div>
       </section>
@@ -226,26 +261,26 @@ export function CourseCatalog({
         )
       ) : (
         <>
-          <p className="text-xs text-slate-500 sm:text-sm">
+          <p className="px-1 text-[11px] text-slate-500 sm:px-0 sm:text-sm">
             Showing {from}–{to} of {totalCount}
           </p>
 
-          <div className="space-y-10 sm:space-y-12">
+          <div className="space-y-8 sm:space-y-12">
             {sections.map((section) => (
-              <section key={section.department?.id ?? '_none'} className="space-y-4">
-                <div className="border-b border-slate-200 pb-2">
-                  <h2 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+              <section key={section.department?.id ?? '_none'} className="space-y-3 sm:space-y-4">
+                <div className="flex items-baseline justify-between gap-3 border-b border-slate-200 pb-2">
+                  <h2 className="text-base font-bold tracking-tight text-slate-900 sm:text-xl">
                     {section.department?.name ?? 'Other'}
                   </h2>
-                  <p className="text-xs text-slate-500 sm:text-sm">
+                  <p className="shrink-0 text-[11px] text-slate-500 sm:text-sm">
                     {section.courses.length}{' '}
                     {section.courses.length === 1 ? 'course' : 'courses'}
                   </p>
                 </div>
-                <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
+                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                   {section.courses.map((course) => (
                     <li key={course.id} className="min-w-0">
-                      <CourseCard course={course} />
+                      <CourseCard course={course} variant="compact" />
                     </li>
                   ))}
                 </ul>
@@ -254,15 +289,15 @@ export function CourseCatalog({
           </div>
 
           {page > 1 || hasMore ? (
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-between gap-2 pt-2 sm:justify-center sm:gap-3">
               {page > 1 ? (
                 <button
                   type="button"
                   onClick={() => navigate(page - 1, initialQ, initialDepartmentId)}
                   disabled={pending}
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 sm:min-h-11 sm:flex-initial sm:px-5"
                 >
-                  Previous page
+                  ← Previous
                 </button>
               ) : null}
               {hasMore ? (
@@ -270,9 +305,9 @@ export function CourseCatalog({
                   type="button"
                   onClick={() => navigate(page + 1, initialQ, initialDepartmentId)}
                   disabled={pending}
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60 sm:min-h-11 sm:flex-initial sm:border-slate-300 sm:bg-white sm:px-5 sm:text-slate-800 sm:hover:bg-slate-50"
                 >
-                  Next page
+                  Next →
                 </button>
               ) : null}
             </div>
