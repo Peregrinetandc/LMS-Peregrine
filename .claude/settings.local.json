@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(npm i *)",
+      "Bash(wmic logicaldisk *)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}
