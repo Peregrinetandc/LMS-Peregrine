@@ -157,7 +157,7 @@ export default function EnrollButton({
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, phone')
+      .select('full_name')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -205,7 +205,6 @@ export default function EnrollButton({
       prefill: {
         name: profile?.full_name ?? undefined,
         email: user.email ?? undefined,
-        contact: profile?.phone ?? undefined,
       },
       notes: {
         course_id: courseId,
