@@ -1068,7 +1068,13 @@ create policy "Admins delete departments" on public.departments
 
 revoke all on public.departments from public;
 grant select on public.departments to authenticated;
+grant select on public.departments to anon;
 grant insert, update, delete on public.departments to authenticated;
+
+create policy "Anon read departments" on public.departments
+  for select
+  to anon
+  using (true);
 
 -- Courses: published visible to all authenticated users
 create policy "Published courses are visible to all" on public.courses

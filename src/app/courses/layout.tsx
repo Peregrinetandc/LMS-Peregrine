@@ -5,7 +5,7 @@ import { LogOut, Sparkles } from 'lucide-react'
 import DashboardNavDrawer, { type NavLinkSections } from '@/components/DashboardNavDrawer'
 import { DashboardLearnerWidgets } from '@/components/internship/DashboardLearnerWidgets'
 import { ROLES, isInstructorRole } from '@/lib/roles'
-import { Button } from '@/components/ui/button'
+import { HomeNavbar } from '@/components/home/HomeNavbar'
 
 const PEREGRINE_AI_HREF = 'https://ai.peregrinehub.com/'
 
@@ -75,74 +75,70 @@ export default async function CoursesLayout({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex min-h-16 items-center justify-between gap-3 py-2">
-            <div className="flex items-center gap-4">
-              <Link href={isAuthenticated ? '/dashboard' : '/courses'} className="flex items-center gap-2.5 shrink-0">
-                <Image
-                  src="/logo.png"
-                  alt="Peregrine T&C"
-                  width={45}
-                  height={45}
-                  className="shrink-0 rounded-full"
-                />
-                <span className="text-base font-bold text-slate-900 sm:text-lg">Peregrine T&C</span>
-              </Link>
-            </div>
+      {isAuthenticated ? (
+        <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex min-h-16 min-w-0 items-center justify-between gap-2 py-2 sm:gap-3">
+              <div className="flex min-w-0 items-center gap-4">
+                <Link
+                  href="/dashboard"
+                  className="flex min-w-0 items-center gap-2 shrink"
+                >
+                  <Image
+                    src="/logo.png"
+                    alt="Peregrine T&C"
+                    width={45}
+                    height={45}
+                    className="h-9 w-9 shrink-0 rounded-full sm:h-11 sm:w-11"
+                  />
+                  <span className="truncate text-sm font-bold text-slate-900 sm:text-lg">
+                    Peregrine T&amp;C
+                  </span>
+                </Link>
+              </div>
 
-            <div className="flex items-center gap-3">
-              {isAuthenticated ? (
-                <>
-                  <div className="hidden sm:flex flex-col items-end">
-                    <span className="text-sm font-semibold text-slate-800">{name}</span>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      isAdmin
-                        ? 'bg-red-100 text-red-700 capitalize'
-                        : isCardCoordinator
-                          ? 'bg-amber-100 text-amber-900'
-                          : isInstructor
-                            ? 'bg-purple-100 text-purple-700 capitalize'
-                            : 'bg-blue-100 text-blue-700 capitalize'
-                    }`}>
-                      {roleLabel}
-                    </span>
-                  </div>
-                  <a
-                    href={PEREGRINE_AI_HREF}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Peregrine AI"
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-violet-600 transition hover:bg-violet-50 hover:text-violet-800"
-                  >
-                    <Sparkles className="h-4 w-4 shrink-0" />
-                    <span className="hidden text-sm font-semibold sm:inline">AI</span>
-                  </a>
-                  <form action="/auth/signout" method="post" className="hidden sm:block">
-                    <button
-                      type="submit"
-                      title="Sign out"
-                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-                    >
-                      <LogOut className="h-4 w-4" />
-                    </button>
-                  </form>
-                  <DashboardNavDrawer name={name} role={roleLabel} sections={navSections} />
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/login">Sign in</Link>
-                  </Button>
-                  <Button size="sm" asChild>
-                    <Link href="/signup">Create Account</Link>
-                  </Button>
+              <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+                <div className="hidden sm:flex flex-col items-end">
+                  <span className="text-sm font-semibold text-slate-800">{name}</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    isAdmin
+                      ? 'bg-red-100 text-red-700 capitalize'
+                      : isCardCoordinator
+                        ? 'bg-amber-100 text-amber-900'
+                        : isInstructor
+                          ? 'bg-purple-100 text-purple-700 capitalize'
+                          : 'bg-blue-100 text-blue-700 capitalize'
+                  }`}>
+                    {roleLabel}
+                  </span>
                 </div>
-              )}
+                <a
+                  href={PEREGRINE_AI_HREF}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Peregrine AI"
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-violet-600 transition hover:bg-violet-50 hover:text-violet-800"
+                >
+                  <Sparkles className="h-4 w-4 shrink-0" />
+                  <span className="hidden text-sm font-semibold sm:inline">AI</span>
+                </a>
+                <form action="/auth/signout" method="post" className="hidden sm:block">
+                  <button
+                    type="submit"
+                    title="Sign out"
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </form>
+                <DashboardNavDrawer name={name} role={roleLabel} sections={navSections} />
+              </div>
             </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      ) : (
+        <HomeNavbar />
+      )}
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-1 py-1 sm:px-6 sm:py-8 lg:px-8">
         {children}

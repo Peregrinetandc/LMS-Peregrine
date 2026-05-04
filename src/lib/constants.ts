@@ -5,7 +5,7 @@
  */
 
 // Centralized version number for the application
-export const APP_VERSION = 'v0.1.2';
+export const APP_VERSION = 'v0.1.3';
 
 // Add any other global enterprise constants here in the future:
 // export const SUPPORT_EMAIL = 'support@peregrinehub.com';
