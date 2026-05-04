@@ -44,6 +44,16 @@ export async function signup(formData: FormData) {
     fail(error.message)
   }
 
+  if (data.user) {
+    const { error: upsertErr } = await admin.from('profiles').upsert(
+      { id: data.user.id, full_name: fullName, email, role: 'learner' },
+      { onConflict: 'id' },
+    )
+    if (upsertErr) {
+      fail(upsertErr.message)
+    }
+  }
+
   // DEV: surface the OTP since SMTP isn't wired yet. Remove once Resend is configured.
   console.log(`[signup OTP] ${email} → ${data.properties?.email_otp}`)
 

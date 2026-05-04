@@ -48,11 +48,36 @@ BEGIN
           e.enrolled_at AS enrolled_at_ts,
           (SELECT count(*) FROM modules m WHERE m.course_id = c.id)::int AS total_modules,
           (
-            SELECT count(*) FROM module_progress mp
-            JOIN modules m ON m.id = mp.module_id
+            -- Type-aware completion: must match learner_module_status_v1 /
+            -- course_enrollments_progress_v1 so the dashboard % matches the
+            -- course page and enrollments view exactly.
+            SELECT count(*) FROM modules m
             WHERE m.course_id = c.id
-              AND mp.learner_id = v_uid
-              AND mp.is_completed = true
+              AND CASE m.type
+                WHEN 'mcq' THEN EXISTS (
+                  SELECT 1 FROM quiz_attempts qa
+                  WHERE qa.module_id = m.id AND qa.learner_id = v_uid AND qa.passed = true
+                )
+                WHEN 'feedback' THEN EXISTS (
+                  SELECT 1 FROM module_feedback_submissions mfs
+                  WHERE mfs.module_id = m.id AND mfs.learner_id = v_uid
+                )
+                WHEN 'assignment' THEN (
+                  EXISTS (
+                    SELECT 1 FROM module_progress mp
+                    WHERE mp.module_id = m.id AND mp.learner_id = v_uid AND mp.is_completed = true
+                  )
+                  OR EXISTS (
+                    SELECT 1 FROM assignments a
+                    JOIN submissions s ON s.assignment_id = a.id AND s.learner_id = v_uid
+                    WHERE a.module_id = m.id AND s.graded_at IS NOT NULL AND coalesce(s.is_passed, false)
+                  )
+                )
+                ELSE EXISTS (
+                  SELECT 1 FROM module_progress mp
+                  WHERE mp.module_id = m.id AND mp.learner_id = v_uid AND mp.is_completed = true
+                )
+              END
           )::int AS completed_modules
         FROM enrollments e
         JOIN courses c ON c.id = e.course_id

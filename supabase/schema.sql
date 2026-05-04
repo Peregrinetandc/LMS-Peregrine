@@ -41,7 +41,10 @@ begin
     new.raw_user_meta_data->>'full_name',
     'learner',
     new.email
-  );
+  )
+  on conflict (id) do update
+    set full_name = coalesce(excluded.full_name, public.profiles.full_name),
+        email     = coalesce(excluded.email, public.profiles.email);
   return new;
 end;
 $$;

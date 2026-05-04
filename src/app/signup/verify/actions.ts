@@ -34,7 +34,16 @@ export async function resendOtp(_prev: ResendState, formData: FormData): Promise
 
   // DEV path: regenerate the OTP via admin and log it. When SMTP is wired,
   // swap to: await supabase.auth.resend({ type: 'signup', email })
-  const { data, error } = await admin.auth.admin.generateLink({ type: 'signup', email })
+  // Preserve existing user_metadata so full_name in raw_user_meta_data isn't blanked.
+  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 })
+  const existing = list?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+  const meta = (existing?.user_metadata ?? {}) as Record<string, unknown>
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'signup',
+    email,
+    options: { data: meta },
+  })
   if (error) return { ok: false, error: error.message }
 
   console.log(`[signup OTP resend] ${email} → ${data.properties?.email_otp}`)
