@@ -205,6 +205,7 @@ export default function EnrollButton({
       prefill: {
         name: profile?.full_name ?? undefined,
         email: user.email ?? undefined,
+        contact: '',
       },
       notes: {
         course_id: courseId,
