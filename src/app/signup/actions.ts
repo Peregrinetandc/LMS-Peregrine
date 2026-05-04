@@ -1,13 +1,9 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 
 export async function signup(formData: FormData) {
-  const supabase = await createClient()
-
   const fullName = (formData.get('full_name') as string)?.trim()
   const email = (formData.get('email') as string)?.trim()
   const password = formData.get('password') as string
@@ -30,7 +26,13 @@ export async function signup(formData: FormData) {
     fail('Password must be at least 6 characters.')
   }
 
-  const { data, error } = await supabase.auth.signUp({
+  const admin = createAdminClient()
+  if (!admin) {
+    fail('Server is not configured for signup. Contact an administrator.')
+  }
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'signup',
     email,
     password,
     options: {
@@ -42,18 +44,10 @@ export async function signup(formData: FormData) {
     fail(error.message)
   }
 
-  // Explicitly upsert the profile with role 'learner' via admin client.
-  // The DB trigger also does this, but we ensure it's set even if the trigger is unavailable.
-  if (data.user) {
-    const admin = createAdminClient()
-    if (admin) {
-      await admin.from('profiles').upsert(
-        { id: data.user.id, full_name: fullName, email, role: 'learner' },
-        { onConflict: 'id' },
-      )
-    }
-  }
+  // DEV: surface the OTP since SMTP isn't wired yet. Remove once Resend is configured.
+  console.log(`[signup OTP] ${email} → ${data.properties?.email_otp}`)
 
-  revalidatePath('/', 'layout')
-  redirect(redirectTo)
+  redirect(
+    `/signup/verify?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectTo)}`,
+  )
 }

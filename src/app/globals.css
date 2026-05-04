@@ -112,7 +112,7 @@ textarea {
 }
 
 /* Global input / textarea / select text fix */
-input,
+input:not([data-input-otp]),
 textarea,
 select {
   color: var(--input-text) !important;
