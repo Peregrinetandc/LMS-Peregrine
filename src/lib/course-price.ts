@@ -26,3 +26,26 @@ export function formatINR(amount: number): string {
 export function amountInPaise(p: CoursePricing): number {
   return Math.round(finalPrice(p) * 100)
 }
+
+export type CouponInput = {
+  discount_type: 'percent' | 'flat'
+  discount_value: number
+}
+
+export function applyCoupon(
+  basePaise: number,
+  coupon: CouponInput,
+): { finalPaise: number; discountPaise: number } {
+  const base = Math.max(0, Math.round(basePaise))
+  if (base <= 0) return { finalPaise: 0, discountPaise: 0 }
+  const value = Number(coupon.discount_value) || 0
+  let discountPaise = 0
+  if (coupon.discount_type === 'percent') {
+    const pct = Math.max(0, Math.min(100, value))
+    discountPaise = Math.round((base * pct) / 100)
+  } else {
+    discountPaise = Math.round(value * 100)
+  }
+  if (discountPaise > base) discountPaise = base
+  return { finalPaise: base - discountPaise, discountPaise }
+}

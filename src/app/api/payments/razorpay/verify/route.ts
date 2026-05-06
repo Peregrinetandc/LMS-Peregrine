@@ -93,8 +93,10 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
+  type PaymentRow = { id: string; coupon_id: string | null; discount_paise: number | null }
+  let paymentRow: PaymentRow | null = null
   if (admin) {
-    await admin
+    const { data: updated } = await admin
       .from('course_payments')
       .update({
         status: 'paid',
@@ -104,6 +106,9 @@ export async function POST(req: Request) {
       })
       .eq('razorpay_order_id', orderId)
       .eq('user_id', user.id)
+      .select('id, coupon_id, discount_paise')
+      .maybeSingle()
+    paymentRow = (updated as PaymentRow | null) ?? null
   }
 
   const { error: enrollErr } = await supabase.from('enrollments').insert({
@@ -115,6 +120,30 @@ export async function POST(req: Request) {
       { error: 'Payment verified but enrollment failed.', detail: enrollErr.message },
       { status: 500 },
     )
+  }
+
+  if (admin && paymentRow?.coupon_id) {
+    const { error: redemptionErr } = await admin.from('coupon_redemptions').insert({
+      coupon_id: paymentRow.coupon_id,
+      user_id: user.id,
+      course_id: courseId,
+      course_payment_id: paymentRow.id,
+      discount_paise: paymentRow.discount_paise ?? 0,
+    })
+    // Only bump used_count if redemption row was newly inserted (unique constraint
+    // (coupon_id, user_id, course_id) prevents double-counting on retries).
+    if (!redemptionErr) {
+      const { data: current } = await admin
+        .from('coupons')
+        .select('used_count')
+        .eq('id', paymentRow.coupon_id)
+        .maybeSingle()
+      const currentCount = Number((current as { used_count?: number } | null)?.used_count ?? 0)
+      await admin
+        .from('coupons')
+        .update({ used_count: currentCount + 1, updated_at: new Date().toISOString() })
+        .eq('id', paymentRow.coupon_id)
+    }
   }
 
   return NextResponse.json({ ok: true })

@@ -416,7 +416,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             {renderOverview({ showEnrollInline: false })}
             {canManageCourse && (
               <div className="pt-1">
-                <CourseManageBar courseId={id} />
+                <CourseManageBar courseId={id} isAdmin={isAdmin} />
               </div>
             )}
           </>
@@ -488,7 +488,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
 
             <CardContent className="flex flex-col gap-4 px-4 pb-6 pt-4">
               {renderOverview()}
-              {canManageCourse && <CourseManageBar courseId={id} />}
+              {canManageCourse && <CourseManageBar courseId={id} isAdmin={isAdmin} />}
             </CardContent>
           </Card>
         </div>

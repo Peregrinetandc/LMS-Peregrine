@@ -4,12 +4,18 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Loader2, Pencil, Trash2, MessageSquareText, Users } from 'lucide-react'
+import { Loader2, Pencil, Tag, Trash2, MessageSquareText, Users } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
 
-export default function CourseManageBar({ courseId }: { courseId: string }) {
+export default function CourseManageBar({
+  courseId,
+  isAdmin = false,
+}: {
+  courseId: string
+  isAdmin?: boolean
+}) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [deleting, setDeleting] = useState(false)
@@ -49,6 +55,15 @@ export default function CourseManageBar({ courseId }: { courseId: string }) {
         </Link>
       </div>
       <div className="flex flex-wrap gap-2">
+        {isAdmin && (
+          <Link
+            href={`/admin/coupons?courseId=${courseId}`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-sm font-medium hover:border-amber-400 hover:text-amber-700 transition"
+          >
+            <Tag className="w-4 h-4" />
+            Coupons
+          </Link>
+        )}
         <Link
           href={`/admin/courses/${courseId}/edit`}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-sm font-medium hover:border-blue-400 hover:text-blue-700 transition"

@@ -40,7 +40,7 @@ export function CoursePageMobileShell({
           : 'pb-6',
       )}
     >
-      <div className="-mx-1 flex flex-col overflow-visible rounded-none border-x-0 border-t-0 border-border bg-card shadow-sm sm:mx-0 sm:overflow-hidden sm:rounded-xl sm:border sm:border-border">
+      <div className="-mx-1 flex flex-col overflow-visible rounded-none border-x-0 border-t-0 border-border bg-card shadow-sm sm:mx-0 sm:overflow-clip sm:rounded-xl sm:border sm:border-border">
         <div className="relative shrink-0">
           {hero}
           {completionBadge ? (

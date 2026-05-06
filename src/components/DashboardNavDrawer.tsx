@@ -17,6 +17,7 @@ import {
   QrCode,
   ScanLine,
   ScanSearch,
+  Tag,
   UserCheck,
   UserPlus,
   Sparkles,
@@ -46,6 +47,7 @@ export type NavItem = {
     | 'sheetSync'
     | 'aiExternal'
     | 'addInstructor'
+    | 'coupons'
 }
 
 export type NavLinkSections = NavItem[][]
@@ -113,6 +115,8 @@ export default function DashboardNavDrawer({
         return <FileSpreadsheet className="h-4 w-4" />
       case 'addInstructor':
         return <UserPlus className="h-4 w-4" />
+      case 'coupons':
+        return <Tag className="h-4 w-4" />
       case 'aiExternal':
         return <Sparkles className="h-4 w-4" />
       default:

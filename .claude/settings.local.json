@@ -14,7 +14,10 @@
       "Bash(curl -s -o /dev/null -w \"checkout: %{http_code}\\\\nadmin/coupons/new: %{http_code}\\\\n\" \"http://localhost:3000/checkout/00000000-0000-0000-0000-000000000000\")",
       "Bash(curl -s -o /dev/null -w \"admin/coupons/new: %{http_code}\\\\n\" \"http://localhost:3000/admin/coupons/new\")",
       "Bash(git mv *)",
-      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/dashboard --max-time 15)"
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/dashboard --max-time 15)",
+      "Bash(curl -s -o /dev/null -w \"coupons \\(no filter\\): %{http_code}\\\\n\" \"http://localhost:3000/admin/coupons\")",
+      "Bash(curl -s -o /dev/null -w \"coupons \\(filtered\\): %{http_code}\\\\n\" \"http://localhost:3000/admin/coupons?courseId=00000000-0000-0000-0000-000000000000\")",
+      "Bash(curl -s -o /dev/null -w \"new coupon \\(preselect\\): %{http_code}\\\\n\" \"http://localhost:3000/admin/coupons/new?courseId=00000000-0000-0000-0000-000000000000\")"
     ]
   }
 }
