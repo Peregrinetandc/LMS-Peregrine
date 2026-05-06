@@ -4,7 +4,17 @@
       "Bash(npx tsc *)",
       "Bash(git stash *)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" npx tsc --noEmit -p tsconfig.json)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(git checkout *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -o /dev/null -w \"checkout: %{http_code}\\\\n\" \"http://localhost:3000/checkout/00000000-0000-0000-0000-000000000000\")",
+      "Bash(curl -s -o /dev/null -w \"admin/coupons: %{http_code}\\\\n\" \"http://localhost:3000/admin/coupons\")",
+      "Bash(curl -s -o /dev/null -w \"api/coupons/validate: %{http_code}\\\\n\" -X POST \"http://localhost:3000/api/coupons/validate\" -H \"Content-Type: application/json\" -d '{}')",
+      "Bash(curl -s -o /dev/null -w \"checkout: %{http_code}\\\\nadmin/coupons/new: %{http_code}\\\\n\" \"http://localhost:3000/checkout/00000000-0000-0000-0000-000000000000\")",
+      "Bash(curl -s -o /dev/null -w \"admin/coupons/new: %{http_code}\\\\n\" \"http://localhost:3000/admin/coupons/new\")",
+      "Bash(git mv *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/dashboard --max-time 15)"
     ]
   }
 }

@@ -61,6 +61,7 @@ export default async function DashboardLayout({
         [
           ...(isInstructor ? [{ href: '/admin/courses/new', label: 'Create Course', icon: 'createCourse' as const }] : []),
           ...(isAdmin ? [{ href: '/admin/add-instructor', label: 'Add Instructor', icon: 'addInstructor' as const }] : []),
+          ...(isAdmin ? [{ href: '/admin/coupons', label: 'Coupons', icon: 'coupons' as const }] : []),
         ],
         [
           ...(isInstructor ? [{ href: '/attendance/learner-id-lookup', label: 'Learner ID Lookup', icon: 'learnerIdLookup' as const }] : []),
