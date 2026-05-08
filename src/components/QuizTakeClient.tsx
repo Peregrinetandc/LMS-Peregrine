@@ -522,11 +522,11 @@ useEffect(() => {
           key={q.id}
           className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${timeExpired ? 'pointer-events-none opacity-60' : ''}`}
         >
-          <div className="mb-3 flex items-start gap-2">
+          <div dir={textDir(q.prompt)} className="mb-3 flex items-start gap-2">
             <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
               {qi + 1}
             </span>
-            <p dir={textDir(q.prompt)} className="font-medium text-slate-900">
+            <p className="font-medium text-slate-900">
               {q.prompt}
             </p>
           </div>
@@ -537,6 +537,7 @@ useEffect(() => {
               return (
                 <li key={o.id}>
                   <label
+                    dir={textDir(o.label)}
                     className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition ${selected
                         ? 'border-cyan-400 bg-cyan-50 text-cyan-900'
                         : 'border-slate-200 bg-slate-50 text-slate-800 hover:border-slate-300 hover:bg-slate-100'
@@ -553,7 +554,7 @@ useEffect(() => {
                     <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">
                       {optionLetter}
                     </span>
-                    <span dir={textDir(o.label)}>{o.label}</span>
+                    <span>{o.label}</span>
                   </label>
                 </li>
               )
