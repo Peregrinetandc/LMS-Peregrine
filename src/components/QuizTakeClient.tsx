@@ -35,6 +35,15 @@ type QuizReview = {
 
 type QuizSubmitResponse = QuizResult & { error?: string; review?: QuizReview[] }
 
+const RTL_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/
+
+function textDir(text: string): 'rtl' | 'ltr' {
+  const letters = text.match(/\p{L}/gu)
+  if (!letters) return 'ltr'
+  const rtlCount = letters.filter((c) => RTL_RE.test(c)).length
+  return rtlCount / letters.length > 0.4 ? 'rtl' : 'ltr'
+}
+
 function formatElapsed(totalSeconds: number) {
   const sec = Math.max(0, totalSeconds)
   const m = Math.floor(sec / 60)
@@ -355,7 +364,7 @@ useEffect(() => {
                     </div>
                     
                     <div className="flex-1 space-y-4">
-                      <p className="text-base font-semibold leading-tight text-slate-800">
+                      <p dir={textDir(row.prompt)} className="text-base font-semibold leading-tight text-slate-800">
                         {row.prompt}
                       </p>
 
@@ -375,7 +384,7 @@ useEffect(() => {
                             ) : (
                               <AlertCircle className="h-4 w-4 text-red-600" />
                             )}
-                            <span className={`text-sm font-medium ${row.isCorrect ? 'text-emerald-900' : 'text-red-900'}`}>
+                            <span dir={textDir(row.selectedLabel)} className={`text-sm font-medium ${row.isCorrect ? 'text-emerald-900' : 'text-red-900'}`}>
                               {row.selectedLabel || "No answer provided"}
                             </span>
                           </div>
@@ -389,7 +398,7 @@ useEffect(() => {
                             </p>
                             <div className="flex items-center gap-2">
                               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                              <span className="text-sm font-medium text-emerald-900">
+                              <span dir={textDir(row.correctLabel)} className="text-sm font-medium text-emerald-900">
                                 {row.correctLabel}
                               </span>
                             </div>
@@ -424,7 +433,10 @@ useEffect(() => {
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">Before you start</h3>
         {introText ? (
-          <div className="rounded-lg border border-cyan-100 bg-cyan-50/60 px-3 py-2 text-sm whitespace-pre-wrap text-slate-700">
+          <div
+            dir={textDir(introText)}
+            className="rounded-lg border border-cyan-100 bg-cyan-50/60 px-3 py-2 text-sm whitespace-pre-wrap text-slate-700"
+          >
             {introText}
           </div>
         ) : null}
@@ -507,12 +519,14 @@ useEffect(() => {
           key={q.id}
           className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${timeExpired ? 'pointer-events-none opacity-60' : ''}`}
         >
-          <p className="mb-3 font-medium text-slate-900">
-            <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+          <div className="mb-3 flex items-start gap-2">
+            <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
               {qi + 1}
             </span>
-            {q.prompt}
-          </p>
+            <p dir={textDir(q.prompt)} className="font-medium text-slate-900">
+              {q.prompt}
+            </p>
+          </div>
           <ul className="space-y-2">
             {q.options.map((o, oi) => {
               const selected = answers[q.id] === o.id
@@ -536,7 +550,7 @@ useEffect(() => {
                     <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-500">
                       {optionLetter}
                     </span>
-                    <span>{o.label}</span>
+                    <span dir={textDir(o.label)}>{o.label}</span>
                   </label>
                 </li>
               )
