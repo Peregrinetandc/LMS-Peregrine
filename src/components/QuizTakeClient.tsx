@@ -41,7 +41,7 @@ function textDir(text: string): 'rtl' | 'ltr' {
   const letters = text.match(/\p{L}/gu)
   if (!letters) return 'ltr'
   const rtlCount = letters.filter((c) => RTL_RE.test(c)).length
-  return rtlCount / letters.length > 0.4 ? 'rtl' : 'ltr'
+  return rtlCount / letters.length > 0.5 ? 'rtl' : 'ltr'
 }
 
 function formatElapsed(totalSeconds: number) {
@@ -433,11 +433,14 @@ useEffect(() => {
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">Before you start</h3>
         {introText ? (
-          <div
-            dir={textDir(introText)}
-            className="rounded-lg border border-cyan-100 bg-cyan-50/60 px-3 py-2 text-sm whitespace-pre-wrap text-slate-700"
-          >
-            {introText}
+          <div className="rounded-lg border border-cyan-100 bg-cyan-50/60 px-3 py-2 text-sm text-slate-700 space-y-1">
+            {introText.split('\n').map((line, i) =>
+              line.trim() ? (
+                <p key={i} dir={textDir(line)}>{line}</p>
+              ) : (
+                <div key={i} className="h-2" />
+              )
+            )}
           </div>
         ) : null}
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
