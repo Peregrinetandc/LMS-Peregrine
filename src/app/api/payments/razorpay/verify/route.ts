@@ -133,16 +133,21 @@ export async function POST(req: Request) {
     // Only bump used_count if redemption row was newly inserted (unique constraint
     // (coupon_id, user_id, course_id) prevents double-counting on retries).
     if (!redemptionErr) {
-      const { data: current } = await admin
-        .from('coupons')
-        .select('used_count')
-        .eq('id', paymentRow.coupon_id)
-        .maybeSingle()
-      const currentCount = Number((current as { used_count?: number } | null)?.used_count ?? 0)
-      await admin
-        .from('coupons')
-        .update({ used_count: currentCount + 1, updated_at: new Date().toISOString() })
-        .eq('id', paymentRow.coupon_id)
+      const { data: rpc, error: rpcErr } = await admin.rpc('increment_coupon_usage', {
+        p_coupon_id: paymentRow.coupon_id,
+      })
+      if (rpcErr) {
+        console.error('[razorpay-verify] coupon increment failed', {
+          coupon_id: paymentRow.coupon_id,
+          payment_id: paymentRow.id,
+          error: rpcErr.message,
+        })
+      } else if ((rpc as Array<{ capped?: boolean }> | null)?.[0]?.capped) {
+        console.warn('[razorpay-verify] coupon cap exceeded post-payment', {
+          coupon_id: paymentRow.coupon_id,
+          payment_id: paymentRow.id,
+        })
+      }
     }
   }
 
