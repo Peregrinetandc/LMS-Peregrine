@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/server'
 import { finalPrice, formatINR } from '@/lib/course-price'
 import { CheckoutForm } from '@/components/checkout/CheckoutForm'
 import { toRenderableImageUrl } from '@/lib/drive-image'
+import { BLUR_DATA_URL } from '@/lib/image-placeholder'
 
 type CourseRow = {
   id: string
@@ -27,7 +28,9 @@ export default async function CheckoutPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    redirect(`/signup?redirect=${encodeURIComponent(`/checkout/${courseId}`)}`)
+    redirect(
+      `/login?redirect=${encodeURIComponent(`/checkout/${courseId}`)}&notice=auth_required`,
+    )
   }
 
   const { data: course } = await supabase
@@ -59,7 +62,7 @@ export default async function CheckoutPage({
     .select('id', { count: 'exact', head: true })
     .eq('course_id', course.id)
 
-  const thumb = toRenderableImageUrl(course.thumbnail_url ?? null)
+  const thumb = toRenderableImageUrl(course.thumbnail_url ?? null, 400)
   const youSave = price - baseFinal
 
   return (
@@ -82,8 +85,8 @@ export default async function CheckoutPage({
           </p>
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_400px]">
-          <section className="space-y-6">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,26rem)] lg:gap-8">
+          <section className="space-y-6 order-2 lg:order-1">
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-100 px-5 py-3.5">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -99,6 +102,9 @@ export default async function CheckoutPage({
                       fill
                       className="object-cover"
                       sizes="(min-width: 640px) 176px, 100vw"
+                      placeholder="blur"
+                      blurDataURL={BLUR_DATA_URL}
+                      priority
                     />
                   </div>
                 ) : (

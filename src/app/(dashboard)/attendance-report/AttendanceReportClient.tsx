@@ -9,6 +9,7 @@ import type {
   AttendanceSessionListItem,
 } from './types'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { ErrorAlert } from '@/components/ui/error-alert'
 
 function formatType(t: string) {
   return t.replace('_', ' ')
@@ -310,8 +311,8 @@ export default function AttendanceReportClient({
         </div>
 
         {err && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {err}
+          <div className="mt-4">
+            <ErrorAlert>{err}</ErrorAlert>
           </div>
         )}
 
@@ -466,11 +467,7 @@ export default function AttendanceReportClient({
           </div>
 
           {detailLoading && <p className="text-sm text-slate-500">Loading attendance…</p>}
-          {detailError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-              {detailError}
-            </div>
-          )}
+          {detailError && <ErrorAlert>{detailError}</ErrorAlert>}
 
           {!detailLoading && !detailError && detailTotalCount > 0 && (
             <>

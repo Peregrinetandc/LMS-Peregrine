@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import type { AttendanceCourseOption } from '../AttendanceClient'
 import { bindOfflineIdCard, lookupOfflineIdCard, unbindOfflineIdCard } from './actions'
 import {
@@ -685,11 +686,7 @@ export default function BindCardsClient({
             </p>
           </div>
         )}
-        {lookupErr && (
-          <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-800 border border-red-200">
-            {lookupErr}
-          </div>
-        )}
+        {lookupErr && <ErrorAlert>{lookupErr}</ErrorAlert>}
         {!online && (
           <p className="text-xs text-amber-800">
             You are offline — Confirm bind will queue for sync.

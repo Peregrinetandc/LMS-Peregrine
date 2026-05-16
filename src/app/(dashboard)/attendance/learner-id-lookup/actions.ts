@@ -1,11 +1,10 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import {
   normalizeOfflinePublicCode,
   OFFLINE_ID_CODE_RE,
 } from '@/lib/offline-id-card'
-import { ROLES, isInstructorRole } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 
 export type LearnerIdCourseInfo = {
   id: string
@@ -40,19 +39,13 @@ export async function lookupLearnerByIdCard(publicCode: string): Promise<LookupL
     return { ok: false, code: 'INVALID_CODE', message: 'Code must look like ID-ABC-XYZ.' }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { ok: false, code: 'NOT_SIGNED_IN', message: 'Not signed in.' }
+  const gate = await requireRoleAction('instructor')
+  if (!gate.ok) {
+    return gate.reason === 'unauth'
+      ? { ok: false, code: 'NOT_SIGNED_IN', message: 'Not signed in.' }
+      : { ok: false, code: 'FORBIDDEN', message: 'You do not have access.' }
   }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isInstructorRole(role)) {
-    return { ok: false, code: 'FORBIDDEN', message: 'You do not have access.' }
-  }
+  const { supabase } = gate
 
   const { data: row, error } = await supabase
     .from('offline_learner_id_cards')

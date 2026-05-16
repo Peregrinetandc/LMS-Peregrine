@@ -1,9 +1,25 @@
+import { Info } from "lucide-react"
 import { LoginForm } from "@/components/login-form"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+/**
+ * Notice codes that the rest of the app can append to `/login?notice=…` URLs to
+ * surface a friendly inline reason for the redirect. Rendered server-side so
+ * the message is visible on first paint — no toast hydration race.
+ */
+const NOTICE_MESSAGES: Record<string, string> = {
+  auth_required: 'Please sign in to continue to checkout.',
+  enroll_required: 'Please sign in to enroll in this course.',
+}
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string | string[]; redirect?: string | string[] }>
+  searchParams: Promise<{
+    message?: string | string[]
+    redirect?: string | string[]
+    notice?: string | string[]
+  }>
 }) {
   const sp = await searchParams
 
@@ -21,9 +37,19 @@ export default async function LoginPage({
     try { return decodeURIComponent(s) } catch { return s }
   })()
 
+  const rawNotice = sp?.notice
+  const noticeKey = Array.isArray(rawNotice) ? rawNotice[0] ?? null : rawNotice ?? null
+  const noticeText = noticeKey ? NOTICE_MESSAGES[noticeKey] ?? null : null
+
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
-      <div className="flex w-full max-w-sm flex-col gap-6">
+      <div className="flex w-full max-w-sm flex-col gap-4">
+        {noticeText ? (
+          <Alert>
+            <Info aria-hidden="true" />
+            <AlertDescription>{noticeText}</AlertDescription>
+          </Alert>
+        ) : null}
         <LoginForm errorMessage={message} redirectTo={redirectTo} />
       </div>
     </div>

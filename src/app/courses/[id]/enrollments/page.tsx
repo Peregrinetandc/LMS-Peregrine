@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Users } from 'lucide-react'
 import EnrollmentsListClient, { type EnrollmentListItem } from '@/components/EnrollmentsListClient'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import { ROLES } from '@/lib/roles'
 
 // ─── Page Component ─────────────────────────────────────────
@@ -42,12 +43,20 @@ export default async function CourseEnrollmentsPage({ params }: { params: Promis
 
   if (rpcError) {
     console.error('[CourseEnrollmentsPage] RPC error:', rpcError.message)
-    return <div className="p-4 text-red-600">Failed to load enrollments. Please refresh.</div>
+    return (
+      <div className="p-4">
+        <ErrorAlert title="Failed to load enrollments">Please refresh the page.</ErrorAlert>
+      </div>
+    )
   }
 
   // Check for embedded error from the RPC
   if (rpcData && typeof rpcData === 'object' && 'error' in rpcData) {
-    return <div className="p-4 text-red-600">{String((rpcData as { error: string }).error)}</div>
+    return (
+      <div className="p-4">
+        <ErrorAlert>{String((rpcData as { error: string }).error)}</ErrorAlert>
+      </div>
+    )
   }
 
   // Parse the RPC response into EnrollmentListItem[]

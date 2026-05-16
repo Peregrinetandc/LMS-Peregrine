@@ -18,7 +18,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { login } from "@/app/login/actions"
 import LoginSubmitButton from "@/app/login/LoginSubmitButton"
-import { AlertCircle } from "lucide-react"
+import { ErrorAlert } from "@/components/ui/error-alert"
 
 interface LoginFormProps extends React.ComponentProps<"div"> {
   errorMessage?: string | null
@@ -52,15 +52,7 @@ export function LoginForm({
             <input type="hidden" name="redirect" value={redirectTo ?? ''} />
             <FieldGroup>
 
-              {errorMessage ? (
-                <div
-                  role="alert"
-                  className="flex flex-inline gap-2 items-center border border-red-200 rounded-lg bg-red-50 p-2 text-sm font-medium text-red-800"
-                >
-                  <AlertCircle className="inline h-4 w-4 shrink-0" aria-hidden="true" />
-                  {errorMessage}
-                </div>
-              ) : null}
+              {errorMessage ? <ErrorAlert>{errorMessage}</ErrorAlert> : null}
 
               <Field>
                 <label htmlFor="email">Email</label>

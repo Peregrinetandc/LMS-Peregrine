@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BookOpen, ChevronRight, Users } from 'lucide-react'
 import { toRenderableImageUrl } from '@/lib/drive-image'
+import { BLUR_DATA_URL } from '@/lib/image-placeholder'
 import type { CatalogCourse } from '@/lib/catalog-courses'
 import { finalPrice, formatINR } from '@/lib/course-price'
 
@@ -15,9 +16,12 @@ function instructorName(course: CatalogCourse): string {
 export function CourseCard({
   course,
   variant = 'compact',
+  priority = false,
 }: {
   course: CatalogCourse
   variant?: CourseCardVariant
+  /** Mark as LCP — preloads the image and disables lazy-loading. Use on at most one card per page. */
+  priority?: boolean
 }) {
   const open = course.enrollment_type === 'open'
   const price = Number(course.price ?? 0)
@@ -72,7 +76,7 @@ export function CourseCard({
       <div className={imageWrapperByVariant}>
         {course.thumbnail_url ? (
           <Image
-            src={toRenderableImageUrl(course.thumbnail_url)}
+            src={toRenderableImageUrl(course.thumbnail_url, variant === 'compact' ? 400 : 800)}
             alt={course.title}
             fill
             className="object-cover transition duration-300 group-hover:scale-[1.03]"
@@ -81,6 +85,9 @@ export function CourseCard({
                 ? '(max-width: 640px) 128px, (max-width: 1024px) 50vw, 33vw'
                 : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
             }
+            placeholder="blur"
+            blurDataURL={BLUR_DATA_URL}
+            priority={priority}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">

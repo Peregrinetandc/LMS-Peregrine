@@ -1,8 +1,7 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import { normalizeOfflinePublicCode, OFFLINE_ID_CODE_RE } from '@/lib/offline-id-card'
-import { ROLES } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 
 const MAX_CODES = 5000
 const LOOKUP_CHUNK = 150
@@ -25,16 +24,17 @@ export async function importOfflineIdCards(input: {
   codes: string[]
   batchLabel?: string | null
 }): Promise<ImportOfflineIdCardsResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, message: 'Not signed in.' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== ROLES.ADMIN) {
-    return { ok: false, message: 'Only administrators can import card codes.' }
+  const gate = await requireRoleAction('admin')
+  if (!gate.ok) {
+    return {
+      ok: false,
+      message:
+        gate.reason === 'unauth'
+          ? 'Not signed in.'
+          : 'Only administrators can import card codes.',
+    }
   }
+  const { user, supabase } = gate
 
   const raw = input.codes ?? []
   if (raw.length === 0) return { ok: false, message: 'No codes provided.' }

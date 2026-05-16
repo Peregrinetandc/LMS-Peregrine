@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
-import { ROLES } from '@/lib/roles'
+import { requireRolePage } from '@/lib/auth/require-role'
 import { AppCard, PageHeader } from '@/components/ui/primitives'
 import { CouponForm, type CourseOption, type CouponFormValues } from '../CouponForm'
 
@@ -10,17 +8,7 @@ export default async function NewCouponPage({
   searchParams: Promise<{ courseId?: string }>
 }) {
   const { courseId } = await searchParams
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  if (profile?.role !== ROLES.ADMIN) redirect('/unauthorized')
+  const { supabase } = await requireRolePage('admin')
 
   const { data: courses } = await supabase
     .from('courses')

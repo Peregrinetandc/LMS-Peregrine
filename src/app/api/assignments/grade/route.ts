@@ -1,25 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
-import { ROLES, isStaffRole } from '@/lib/roles'
+import { requireAdminApi } from '@/utils/supabase/admin'
+import { ROLES } from '@/lib/roles'
+import { requireRoleApi } from '@/lib/auth/require-role'
 
 export const runtime = 'nodejs'
 
 export async function PATCH(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = me?.role ?? ROLES.LEARNER
-  if (!isStaffRole(role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const gate = await requireRoleApi('staff')
+  if (!gate.ok) return gate.response
+  const { user, role, supabase } = gate
 
   let body: { submissionId?: string; score?: number; feedback?: string | null }
   try {
@@ -37,8 +26,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Valid score required' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
-  const db = admin ?? supabase
+  const adminGate = requireAdminApi()
+  if (!adminGate.ok) return adminGate.response
+  const db = adminGate.admin
 
   const { data: sub, error: sErr } = await db
     .from('submissions')

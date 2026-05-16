@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Lock, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import { Input } from '@/components/ui/input'
 import { formatINR } from '@/lib/course-price'
 import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout'
@@ -107,7 +108,7 @@ export function CheckoutForm({
   }
 
   return (
-    <aside className="lg:sticky lg:top-24 lg:self-start">
+    <aside className="order-1 lg:order-2 lg:sticky lg:top-24 lg:self-start">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-3.5">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -168,12 +169,17 @@ export function CheckoutForm({
                   variant="outline"
                   onClick={apply}
                   disabled={applying || !code.trim()}
+                  className="h-10 md:h-8"
                 >
                   {applying ? 'Applying…' : 'Apply'}
                 </Button>
               </div>
             )}
-            {error ? <p className="mt-1.5 text-xs text-red-600">{error}</p> : null}
+            {error ? (
+              <ErrorAlert className="mt-2 py-1.5 text-xs" onRetry={apply}>
+                {error}
+              </ErrorAlert>
+            ) : null}
           </div>
 
           <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">

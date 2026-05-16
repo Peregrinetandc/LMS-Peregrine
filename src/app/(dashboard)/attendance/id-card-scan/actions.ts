@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { requireAdminAction } from '@/utils/supabase/admin'
 import { ensureSessionRosterRows } from '@/lib/ensure-session-roster'
 import { resolveBoundLearnerForCourse } from '@/lib/offline-id-card-attendance'
 import { requireScanAttendanceCourseAccess } from '@/lib/scan-attendance-access'
@@ -69,7 +69,9 @@ export async function getIdCardSessionSubmissionStatus(
     return { error: 'Not an offline session.' }
   }
 
-  const db = createAdminClient() ?? supabase
+  const adminGate = requireAdminAction()
+  if (!adminGate.ok) return { error: adminGate.error }
+  const db = adminGate.admin
 
   const { data: row, error: rErr } = await db
     .from('module_session_roster')
@@ -111,7 +113,9 @@ export async function finalizeIdCardSessionAttendance(input: {
     return { error: 'Only offline sessions support ID card attendance.' }
   }
 
-  const db = createAdminClient() ?? supabase
+  const adminGate = requireAdminAction()
+  if (!adminGate.ok) return { error: adminGate.error }
+  const db = adminGate.admin
 
   const ensured = await ensureSessionRosterRows(db, input.moduleId, input.courseId)
   if (ensured.error) {
@@ -146,7 +150,11 @@ export async function recordIdCardAttendanceScan(input: {
   }
 
   /** After access checks, use service role so roster writes are not dropped by RLS/session edge cases. */
-  const db = createAdminClient() ?? supabase
+  const adminGate = requireAdminAction()
+  if (!adminGate.ok) {
+    return { ok: false, code: 'SERVER_MISCONFIGURED', message: adminGate.error }
+  }
+  const db = adminGate.admin
 
   // Use atomic RPC for the entire scan process
   const { data, error } = await db.rpc('record_id_card_attendance_scan_v1', {

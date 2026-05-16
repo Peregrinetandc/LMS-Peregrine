@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from 'react'
 import { AppButton, AppCard } from '@/components/ui/primitives'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import { createInstructorAccount, type CreateInstructorState } from './actions'
 
 const initialState: CreateInstructorState = { ok: null, error: null }
@@ -63,11 +64,7 @@ export default function AddInstructorForm() {
           />
         </div>
 
-        {state.error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-            {state.error}
-          </p>
-        ) : null}
+        {state.error ? <ErrorAlert>{state.error}</ErrorAlert> : null}
         {state.ok === true ? (
           <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900" role="status">
             Instructor account created. They can sign in with this email and password.

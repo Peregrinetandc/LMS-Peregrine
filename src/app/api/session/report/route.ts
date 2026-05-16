@@ -1,8 +1,7 @@
-import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
-import { isUuid, requireUser } from '../_helpers'
+import { isUuid } from '../_helpers'
 import { MAX_DAILY_ACTIVE_SECONDS } from '@/lib/internship/constants'
-import { ROLES, isInstructorRole } from '@/lib/roles'
+import { requireRoleApi } from '@/lib/auth/require-role'
 
 function parseDate(s: string | null, fallback: Date): Date {
   if (!s) return fallback
@@ -47,22 +46,9 @@ function overlapsWindow(row: SessionRow, fromMs: number, toMs: number): boolean 
 }
 
 export async function GET(req: Request) {
-  const supabase = await createClient()
-  const user = await requireUser(supabase)
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isInstructorRole(role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const gate = await requireRoleApi('instructor')
+  if (!gate.ok) return gate.response
+  const { user, supabase } = gate
 
   const url = new URL(req.url)
   const toParam = url.searchParams.get('to')

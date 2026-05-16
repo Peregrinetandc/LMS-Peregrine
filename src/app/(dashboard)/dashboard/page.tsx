@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { ROLES, isInstructorRole } from '@/lib/roles'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import type { InstructorSummary, LearnerSummary } from './_types'
 import CoordinatorDashboard from './_components/CoordinatorDashboard'
 import InstructorDashboard from './_components/InstructorDashboard'
@@ -38,7 +39,11 @@ export default async function DashboardPage() {
 
     if (error) {
       console.error('[DashboardPage] instructor RPC error:', error.message)
-      return <div className="p-4 text-red-600">Failed to load dashboard. Please refresh.</div>
+      return (
+        <div className="p-4">
+          <ErrorAlert title="Failed to load dashboard">Please refresh the page.</ErrorAlert>
+        </div>
+      )
     }
 
     const summary = rpcData as InstructorSummary

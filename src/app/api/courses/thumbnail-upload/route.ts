@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
 import { uploadCourseThumbnailToDrive } from '@/utils/google-drive'
-import { ROLES, isInstructorRole } from '@/lib/roles'
+import { requireRoleApi } from '@/lib/auth/require-role'
 
 export const runtime = 'nodejs'
 
@@ -14,33 +13,9 @@ function isAllowedThumbnailType(file: File): boolean {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 })
-    }
-
-    const role = profile?.role
-    if (!isInstructorRole(role)) {
-      return NextResponse.json(
-        { error: 'Only instructors or admins can upload course thumbnails.' },
-        { status: 403 },
-      )
-    }
+    const gate = await requireRoleApi('instructor')
+    if (!gate.ok) return gate.response
+    const { user } = gate
 
     const formData = await request.formData()
     const file = formData.get('file')

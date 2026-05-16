@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import { createCoupon, updateCoupon } from './actions'
 
 // Server actions throw NEXT_REDIRECT internally to perform the navigation;
@@ -200,7 +201,7 @@ export function CouponForm({
         </div>
       </div>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
 
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>

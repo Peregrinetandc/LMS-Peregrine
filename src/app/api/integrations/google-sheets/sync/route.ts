@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { runSheetSync } from '@/lib/integrations/google-sheets/syncFromRows'
-import { ROLES } from '@/lib/roles'
+import { requireRoleApi } from '@/lib/auth/require-role'
 
 export const runtime = 'nodejs'
 
@@ -29,19 +28,8 @@ export async function POST(request: Request) {
   const cronOk = !!(cronSecret && bearer && timingSafeEqual(bearer, cronSecret))
 
   if (!cronOk) {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    const role = profile?.role ?? ROLES.LEARNER
-    if (role !== ROLES.ADMIN) {
-      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
-    }
+    const gate = await requireRoleApi('admin')
+    if (!gate.ok) return gate.response
   }
 
   const admin = createAdminClient()

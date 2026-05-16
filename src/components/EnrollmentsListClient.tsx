@@ -2,6 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import { AppCard } from '@/components/ui/primitives'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 import { Search, ArrowUpDown, Copy, Check, Users, CalendarDays } from 'lucide-react'
 
 export type EnrollmentListItem = {
@@ -55,10 +62,17 @@ export default function EnrollmentsListClient({ items }: Props) {
 
   if (items.length === 0) {
     return (
-      <AppCard className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500">
-        <Users className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-        No learners have enrolled in this course yet.
-      </AppCard>
+      <Empty className="border border-slate-200 bg-white">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Users />
+          </EmptyMedia>
+          <EmptyTitle>No enrollments yet</EmptyTitle>
+          <EmptyDescription>
+            Learners who enroll in this course will appear here with their progress.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     )
   }
 

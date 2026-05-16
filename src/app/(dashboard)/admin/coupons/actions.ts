@@ -2,23 +2,15 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { ROLES } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 import { normalizeCode } from '@/lib/coupons'
 
 async function ensureAdmin() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  if (profile?.role !== ROLES.ADMIN) throw new Error('Unauthorized')
+  const result = await requireRoleAction('admin')
+  if (!result.ok) {
+    throw new Error(result.reason === 'unauth' ? 'Not signed in' : 'Unauthorized')
+  }
 }
 
 type CouponInput = {

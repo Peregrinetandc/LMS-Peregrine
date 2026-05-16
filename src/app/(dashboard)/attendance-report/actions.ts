@@ -1,8 +1,8 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import { ensureSessionRosterRows } from '@/lib/ensure-session-roster'
-import { ROLES, isInstructorRole } from '@/lib/roles'
+import { ROLES } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 import type {
   AttendanceModuleDetailPagination,
   AttendanceReportFilters,
@@ -51,16 +51,9 @@ function hasRestrictiveRosterFilters(filters: AttendanceReportFilters, learnerId
 type SessionListResult = { sessions: AttendanceSessionListItem[] } | { error: string }
 
 export async function fetchAttendanceSessionList(filters: AttendanceReportFilters): Promise<SessionListResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not signed in' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isInstructorRole(role)) return { error: 'Forbidden' }
+  const gate = await requireRoleAction('instructor')
+  if (!gate.ok) return { error: gate.reason === 'unauth' ? 'Not signed in' : 'Forbidden' }
+  const { user, role, supabase } = gate
 
   let coursesQuery = supabase.from('courses').select('id, title, course_code').order('title')
   if (role !== ROLES.ADMIN) coursesQuery = coursesQuery.eq('instructor_id', user.id)
@@ -300,15 +293,9 @@ export async function fetchAttendanceModuleDetail({
   pagination: AttendanceModuleDetailPagination
 }): Promise<ModuleDetailResult> {
   const { page, pageSize } = clampDetailPagination(pagination.page, pagination.pageSize)
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not signed in' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isInstructorRole(role)) return { error: 'Forbidden' }
+  const gate = await requireRoleAction('instructor')
+  if (!gate.ok) return { error: gate.reason === 'unauth' ? 'Not signed in' : 'Forbidden' }
+  const { user, role, supabase } = gate
 
   const { data: course, error: cErr } = await supabase
     .from('courses')

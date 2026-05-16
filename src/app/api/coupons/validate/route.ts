@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { requireAdminApi } from '@/utils/supabase/admin'
 import { validateCouponForCourse, type CourseRow } from '@/lib/coupons'
 
 export const runtime = 'nodejs'
@@ -37,9 +37,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Course not found.' }, { status: 404 })
   }
 
-  const admin = createAdminClient()
+  const adminGate = requireAdminApi()
+  if (!adminGate.ok) return adminGate.response
   const result = await validateCouponForCourse({
-    supabase: admin ?? supabase,
+    supabase: adminGate.admin,
     code,
     course: course as CourseRow,
     userId: user.id,

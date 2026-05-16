@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
-import { ROLES, isStaffRole } from '@/lib/roles'
+import { ROLES, type Role } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 import {
   normalizeOfflinePublicCode,
   OFFLINE_ID_CODE_RE,
@@ -10,29 +10,23 @@ import {
 } from '@/lib/offline-id-card'
 
 async function requireStaffAndCourseAccess(courseId: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { supabase, user: null as null, error: 'NOT_SIGNED_IN' as const }
+  const gate = await requireRoleAction('staff')
+  if (!gate.ok) {
+    return gate.reason === 'unauth'
+      ? { supabase: gate.supabase, user: null as null, role: null as Role | null, error: 'NOT_SIGNED_IN' as const }
+      : { supabase: gate.supabase, user: gate.user, role: gate.role, error: 'FORBIDDEN' as const }
   }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isStaffRole(role)) {
-    return { supabase, user, error: 'FORBIDDEN' as const }
-  }
+  const { supabase, user, role } = gate
 
   const { data: course } = await supabase.from('courses').select('instructor_id').eq('id', courseId).single()
   if (!course) {
-    return { supabase, user, error: 'FORBIDDEN' as const }
+    return { supabase, user, role, error: 'FORBIDDEN' as const }
   }
   if (role !== ROLES.ADMIN && role !== ROLES.COORDINATOR && course.instructor_id !== user.id) {
-    return { supabase, user, error: 'FORBIDDEN' as const }
+    return { supabase, user, role, error: 'FORBIDDEN' as const }
   }
 
-  return { supabase, user, error: null as null }
+  return { supabase, user, role, error: null as null }
 }
 
 export async function lookupOfflineIdCard(publicCode: string): Promise<LookupOfflineIdCardResult> {
@@ -41,19 +35,13 @@ export async function lookupOfflineIdCard(publicCode: string): Promise<LookupOff
     return { ok: false, code: 'INVALID_CODE', message: 'Code must look like ID-ABC-XYZ.' }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { ok: false, code: 'NOT_SIGNED_IN', message: 'Not signed in.' }
+  const gate = await requireRoleAction('staff')
+  if (!gate.ok) {
+    return gate.reason === 'unauth'
+      ? { ok: false, code: 'NOT_SIGNED_IN', message: 'Not signed in.' }
+      : { ok: false, code: 'FORBIDDEN', message: 'You do not have access.' }
   }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isStaffRole(role)) {
-    return { ok: false, code: 'FORBIDDEN', message: 'You do not have access.' }
-  }
+  const { supabase } = gate
 
   const { data: row, error } = await supabase
     .from('offline_learner_id_cards')
@@ -182,7 +170,7 @@ export async function unbindOfflineIdCard(input: {
     return { ok: false, code: 'INVALID_CODE', message: 'Code must look like ID-ABC-XYZ.' }
   }
 
-  const { supabase, user, error: accessErr } = await requireStaffAndCourseAccess(input.courseId)
+  const { supabase, user, role, error: accessErr } = await requireStaffAndCourseAccess(input.courseId)
   if (!user || accessErr) {
     const code = accessErr === 'NOT_SIGNED_IN' ? 'NOT_SIGNED_IN' : 'FORBIDDEN'
     const message =
@@ -190,12 +178,12 @@ export async function unbindOfflineIdCard(input: {
     return { ok: false, code, message }
   }
 
-  const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (prof?.role === ROLES.COORDINATOR) {
+  // Coordinators have read access for binding, but unbinding is reserved for admin + instructor.
+  if (role === ROLES.COORDINATOR) {
     return { ok: false, code: 'FORBIDDEN', message: 'Coordinators cannot unbind ID cards.' }
   }
 
-  const isAdmin = prof?.role === ROLES.ADMIN
+  const isAdmin = role === ROLES.ADMIN
 
   const { data: card, error: cardErr } = await supabase
     .from('offline_learner_id_cards')

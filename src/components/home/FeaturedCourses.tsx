@@ -54,7 +54,7 @@ export function FeaturedCourses({ courses }: { courses: CatalogCourse[] }) {
               key={course.id}
               className={`min-w-0 ${idx >= 3 ? 'hidden lg:block' : idx >= 2 ? 'hidden sm:block' : ''}`}
             >
-              <CourseCard course={course} variant="featured" />
+              <CourseCard course={course} variant="featured" priority={idx === 0} />
             </li>
           ))}
         </ul>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { requireAdminApi } from '@/utils/supabase/admin'
 
 export const runtime = 'nodejs'
 
@@ -26,8 +26,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'assignmentId required' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
-  const db = admin ?? supabase
+  const adminGate = requireAdminApi()
+  if (!adminGate.ok) return adminGate.response
+  const db = adminGate.admin
 
   const { data: sub, error: sErr } = await db
     .from('submissions')

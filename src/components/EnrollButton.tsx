@@ -38,9 +38,9 @@ export default function EnrollButton({
   const final = finalPrice({ price, discount_percent: discountPercent })
   const paid = final > 0
 
-  const goToSignup = (target: string) => {
+  const goToLogin = (target: string, notice: 'auth_required' | 'enroll_required') => {
     const redirectTo = encodeURIComponent(target)
-    router.push(`/signup?redirect=${redirectTo}`)
+    router.push(`/login?redirect=${redirectTo}&notice=${notice}`)
   }
 
   const enrollFree = async () => {
@@ -49,7 +49,7 @@ export default function EnrollButton({
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      goToSignup(pathname)
+      goToLogin(pathname, 'enroll_required')
       return
     }
     const { error } = await supabase.from('enrollments').insert({
@@ -68,7 +68,7 @@ export default function EnrollButton({
     if (paid) {
       const target = `/checkout/${courseId}`
       if (!isAuthenticated) {
-        goToSignup(target)
+        goToLogin(target, 'auth_required')
         return
       }
       router.push(target)
@@ -76,7 +76,7 @@ export default function EnrollButton({
     }
 
     if (!isAuthenticated) {
-      goToSignup(pathname)
+      goToLogin(pathname, 'enroll_required')
       return
     }
     if (busyRef.current) return

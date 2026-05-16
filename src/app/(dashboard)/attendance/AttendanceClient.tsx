@@ -6,6 +6,7 @@ import { prepareSessionRoster } from './actions'
 import SessionAttendanceClient, { type RosterRow } from './SessionAttendanceClient'
 import type { SessionModuleListItem } from './types'
 import { AppButton } from '@/components/ui/primitives'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import { PencilIcon, XIcon } from 'lucide-react'
 
 export type AttendanceCourseOption = { id: string; title: string; course_code: string }
@@ -156,9 +157,7 @@ export default function AttendanceClient({
             </button>
           </div>
 
-          {loadErr && (
-            <div className="rounded-lg px-4 py-3 text-sm bg-red-50 text-red-800 border border-red-200">{loadErr}</div>
-          )}
+          {loadErr && <ErrorAlert>{loadErr}</ErrorAlert>}
 
           {isPending && !rosterRows && !loadErr && (
             <p className="text-sm text-slate-500">Loading roster…</p>

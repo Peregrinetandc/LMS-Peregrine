@@ -1,10 +1,16 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
+import { Ticket } from 'lucide-react'
 import { createAdminClient } from '@/utils/supabase/admin'
-import { ROLES } from '@/lib/roles'
+import { requireRolePage } from '@/lib/auth/require-role'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/primitives'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 import { formatINR } from '@/lib/course-price'
 import { CouponRowActions } from './CouponRowActions'
 
@@ -28,17 +34,7 @@ export default async function AdminCouponsPage({
   searchParams: Promise<{ courseId?: string }>
 }) {
   const { courseId } = await searchParams
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  if (profile?.role !== ROLES.ADMIN) redirect('/unauthorized')
+  const { supabase } = await requireRolePage('admin')
 
   const admin = createAdminClient()
   const { data: coupons } = (admin
@@ -94,7 +90,29 @@ export default async function AdminCouponsPage({
         </Link>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {list.length === 0 ? (
+        <Empty className="border border-slate-200 bg-white">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Ticket />
+            </EmptyMedia>
+            <EmptyTitle>
+              {courseId ? 'No coupons for this course' : 'No coupons yet'}
+            </EmptyTitle>
+            <EmptyDescription>
+              {courseId
+                ? 'Create a coupon scoped to this course, or one that applies to all courses.'
+                : 'Discount codes let buyers save at checkout. Create your first one to get started.'}
+            </EmptyDescription>
+          </EmptyHeader>
+          <Link
+            href={courseId ? `/admin/coupons/new?courseId=${courseId}` : '/admin/coupons/new'}
+          >
+            <Button>Create coupon</Button>
+          </Link>
+        </Empty>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -108,16 +126,7 @@ export default async function AdminCouponsPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                  {courseId
-                    ? 'No coupons apply to this course yet.'
-                    : 'No coupons yet. Create your first one.'}
-                </td>
-              </tr>
-            ) : (
-              list.map((c) => (
+            {list.map((c) => (
                 <tr key={c.id}>
                   <td className="px-4 py-3 font-mono font-semibold text-slate-900">{c.code}</td>
                   <td className="px-4 py-3 text-slate-700">
@@ -157,11 +166,11 @@ export default async function AdminCouponsPage({
                     <CouponRowActions id={c.id} isActive={c.is_active} />
                   </td>
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }

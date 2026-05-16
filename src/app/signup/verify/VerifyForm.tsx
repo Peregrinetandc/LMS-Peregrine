@@ -2,8 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ErrorAlert } from '@/components/ui/error-alert'
 import {
   InputOTP,
   InputOTPGroup,
@@ -74,15 +75,7 @@ export default function VerifyForm({
 
   return (
     <div className="flex flex-col gap-4">
-      {verifyState.error ? (
-        <div
-          role="alert"
-          className="flex flex-inline gap-2 items-center border border-red-200 rounded-lg bg-red-50 p-2 text-sm font-medium text-red-800"
-        >
-          <AlertCircle className="inline h-4 w-4 shrink-0" aria-hidden />
-          {verifyState.error}
-        </div>
-      ) : null}
+      {verifyState.error ? <ErrorAlert>{verifyState.error}</ErrorAlert> : null}
 
       {resendState.ok && !verifyState.error ? (
         <div

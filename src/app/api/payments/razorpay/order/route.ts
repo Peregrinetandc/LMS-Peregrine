@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { requireAdminApi } from '@/utils/supabase/admin'
 import { amountInPaise, finalPrice } from '@/lib/course-price'
 import { validateCouponForCourse, type CourseRow } from '@/lib/coupons'
 
@@ -57,11 +57,13 @@ export async function POST(req: Request) {
   let couponId: string | null = null
   let appliedCouponCode: string | null = null
 
-  const admin = createAdminClient()
+  const adminGate = requireAdminApi()
+  if (!adminGate.ok) return adminGate.response
+  const admin = adminGate.admin
 
   if (couponCode) {
     const result = await validateCouponForCourse({
-      supabase: admin ?? supabase,
+      supabase: admin,
       code: couponCode,
       course: course as CourseRow,
       userId: user.id,
@@ -112,19 +114,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Razorpay returned no order id.' }, { status: 502 })
   }
 
-  if (admin) {
-    await admin.from('course_payments').insert({
-      user_id: user.id,
-      course_id: courseId,
-      razorpay_order_id: rzpJson.id,
-      amount_paise: amount,
-      original_amount_paise: originalPaise,
-      discount_paise: discountPaise,
-      coupon_id: couponId,
-      currency: 'INR',
-      status: 'created',
-    })
-  }
+  await admin.from('course_payments').insert({
+    user_id: user.id,
+    course_id: courseId,
+    razorpay_order_id: rzpJson.id,
+    amount_paise: amount,
+    original_amount_paise: originalPaise,
+    discount_paise: discountPaise,
+    coupon_id: couponId,
+    currency: 'INR',
+    status: 'created',
+  })
 
   return NextResponse.json({
     order_id: rzpJson.id,

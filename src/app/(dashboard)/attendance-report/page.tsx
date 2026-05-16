@@ -1,27 +1,11 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
 import { PageHeader } from '@/components/ui/primitives'
 import AttendanceReportClient from './AttendanceReportClient'
 import type { AttendanceReportCourseOption } from './types'
-import { ROLES, isInstructorRole } from '@/lib/roles'
+import { ROLES } from '@/lib/roles'
+import { requireRolePage } from '@/lib/auth/require-role'
 
 export default async function AttendanceReportPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isInstructorRole(role)) {
-    redirect('/unauthorized')
-  }
+  const { user, role, supabase } = await requireRolePage('instructor')
 
   let coursesQuery = supabase.from('courses').select('id, title, course_code').order('title')
   if (role !== ROLES.ADMIN) {

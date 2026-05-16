@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { requireAdminApi } from '@/utils/supabase/admin'
 import { uploadAssignmentToDrive } from '@/utils/google-drive'
 import {
   guessMime,
@@ -50,8 +50,9 @@ export async function POST(request: Request) {
       )
     }
 
-    const admin = createAdminClient()
-    const db = admin ?? supabase
+    const adminGate = requireAdminApi()
+    if (!adminGate.ok) return adminGate.response
+    const db = adminGate.admin
 
     const { data: existing, error: exErr } = await db
       .from('submissions')

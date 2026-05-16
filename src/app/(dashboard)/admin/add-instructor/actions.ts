@@ -1,9 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { ROLES } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 
 export type CreateInstructorState = {
   ok: boolean | null
@@ -14,17 +14,15 @@ export async function createInstructorAccount(
   _prev: CreateInstructorState,
   formData: FormData,
 ): Promise<CreateInstructorState> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { ok: false, error: 'You must be signed in.' }
-  }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== ROLES.ADMIN) {
-    return { ok: false, error: 'Only administrators can create instructor accounts.' }
+  const gate = await requireRoleAction('admin')
+  if (!gate.ok) {
+    return {
+      ok: false,
+      error:
+        gate.reason === 'unauth'
+          ? 'You must be signed in.'
+          : 'Only administrators can create instructor accounts.',
+    }
   }
 
   const fullName = String(formData.get('name') ?? '').trim()

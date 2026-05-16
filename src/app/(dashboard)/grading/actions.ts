@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { ROLES, isStaffRole } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 import { revalidatePath } from 'next/cache'
 
 // ─── Types ───────────────────────────────────────────────────
@@ -111,14 +111,9 @@ export async function fetchGradingData(
 export async function bulkUpdateGrades(
   grades: { submissionId: string; score: number; feedback: string | null }[],
 ) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not signed in' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isStaffRole(role)) return { error: 'Forbidden' }
+  const gate = await requireRoleAction('staff')
+  if (!gate.ok) return { error: gate.reason === 'unauth' ? 'Not signed in' : 'Forbidden' }
+  const { supabase } = gate
 
   // Look up passing_score for each assignment to compute is_passed
   const subIds = grades.map((g) => g.submissionId)

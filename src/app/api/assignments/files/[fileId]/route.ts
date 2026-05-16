@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { requireAdminApi } from '@/utils/supabase/admin'
 import { deleteFileFromDrive } from '@/utils/google-drive'
 
 export const runtime = 'nodejs'
@@ -20,8 +20,9 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const admin = createAdminClient()
-  const db = admin ?? supabase
+  const adminGate = requireAdminApi()
+  if (!adminGate.ok) return adminGate.response
+  const db = adminGate.admin
 
   if (fileId === 'legacy') {
     const assignmentId = new URL(request.url).searchParams.get('assignmentId')?.trim()

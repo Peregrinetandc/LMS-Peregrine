@@ -1,20 +1,14 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import { ensureSessionRosterRows } from '@/lib/ensure-session-roster'
 import type { RosterRow } from './SessionAttendanceClient'
-import { ROLES, isInstructorRole } from '@/lib/roles'
+import { ROLES } from '@/lib/roles'
+import { requireRoleAction } from '@/lib/auth/require-role'
 
 export async function prepareSessionRoster(courseId: string, moduleId: string): Promise<{ rows: RosterRow[] } | { error: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not signed in' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const role = profile?.role ?? ROLES.LEARNER
-  if (!isInstructorRole(role)) return { error: 'Forbidden' }
+  const gate = await requireRoleAction('instructor')
+  if (!gate.ok) return { error: gate.reason === 'unauth' ? 'Not signed in' : 'Forbidden' }
+  const { user, role, supabase } = gate
 
   const { data: course } = await supabase.from('courses').select('instructor_id').eq('id', courseId).single()
   if (!course) return { error: 'Course not found' }

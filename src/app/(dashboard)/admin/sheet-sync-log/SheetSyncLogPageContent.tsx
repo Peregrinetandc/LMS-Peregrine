@@ -1,8 +1,6 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
 import { AppCard, PageHeader } from '@/components/ui/primitives'
 import { RunSheetSyncButton } from './RunSheetSyncButton'
-import { ROLES } from '@/lib/roles'
+import { requireRolePage } from '@/lib/auth/require-role'
 
 type SheetSyncRun = {
   id: string
@@ -17,16 +15,7 @@ type SheetSyncRun = {
 }
 
 export default async function SheetSyncLogPageContent() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== ROLES.ADMIN) {
-    redirect('/unauthorized')
-  }
+  const { supabase } = await requireRolePage('admin')
 
   const { data: runs, error } = await supabase
     .from('sheet_sync_runs')

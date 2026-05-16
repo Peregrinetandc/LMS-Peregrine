@@ -435,8 +435,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         }
       />
 
-      <div className="mx-auto hidden w-full max-w-7xl flex-col gap-6 xl:grid xl:max-w-none xl:grid-cols-[minmax(0,1fr)_minmax(280px,26rem)] xl:items-start xl:gap-8">
-        <div className="flex min-w-0 flex-col gap-6 xl:col-start-1">
+      <div className="mx-auto hidden w-full max-w-7xl flex-col gap-6 lg:grid lg:max-w-none lg:grid-cols-[minmax(0,1fr)_minmax(260px,22rem)] lg:items-start lg:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,26rem)] xl:gap-8">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-1">
           <Card className="gap-0 overflow-hidden p-0 shadow-sm">
             {course.thumbnail_url ? (
               <div className="relative h-36 w-full min-w-0 overflow-visible bg-muted sm:h-44">
@@ -493,8 +493,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
           </Card>
         </div>
 
-        <div className="min-w-0 xl:sticky xl:top-20 xl:col-start-2 xl:self-start">
-          <Card className="flex max-h-none flex-col gap-0 overflow-hidden shadow-sm xl:max-h-[calc(100vh-6rem)]">
+        <div className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:self-start">
+          <Card className="flex max-h-none flex-col gap-0 overflow-hidden shadow-sm lg:max-h-[calc(100vh-6rem)]">
             <CardHeader className="shrink-0 pb-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle className="text-lg">Course Syllabus</CardTitle>
