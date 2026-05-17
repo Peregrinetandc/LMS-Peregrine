@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { Award, BookOpen, CalendarDays, Check, IndianRupee, Info, User } from 'lucide-react'
 import EnrollButton from '@/components/EnrollButton'
 import CourseManageBar from '@/components/CourseManageBar'
+import ExpandableText from '@/components/ExpandableText'
 import { groupModulesByWeek } from '@/lib/course-modules'
 import { getLearnerModuleStatusMap } from '@/lib/learner-module-status'
 import { toRenderableImageUrl } from '@/lib/drive-image'
@@ -377,7 +378,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
               About this course
             </h3>
-            <p className="text-sm leading-relaxed text-slate-700">{course.description}</p>
+            <ExpandableText text={course.description} className="text-sm leading-relaxed text-slate-700" clampLines={5} />
           </div>
         )}
 

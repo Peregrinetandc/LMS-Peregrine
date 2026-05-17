@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createClient } from '@/utils/supabase/client'
@@ -12,13 +12,22 @@ import {
 import {
   Upload,
   CheckCircle2,
+  XCircle,
   FileText,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  Film,
   Loader2,
   Send,
   Undo2,
   Trash2,
+  AlertTriangle,
+  Clock3,
+  ExternalLink,
 } from 'lucide-react'
 import { queryKeys } from '@/lib/query/query-keys'
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
+import ExpandableText from '@/components/ExpandableText'
 import {
   fetchWithRetry,
   getFetchErrorMessage,
@@ -39,18 +48,54 @@ type ApiSubmission = {
 
 const IS_ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 const ANDROID_WARN_BYTES = 50 * 1024 * 1024 // 50 MB
-
-/** Long duration so small-phone / WebView users can read the real server or network message. */
 const UPLOAD_ISSUE_TOAST_MS = 18_000
-
-/** Bar stays below 100% until the API returns OK (server has finished saving to Google Drive). */
 const UPLOAD_PROGRESS_MAX_IN_FLIGHT = 99
 
-export default function AssignmentUpload({ assignmentId }: { assignmentId: string }) {
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
+}
+
+function iconForFileName(name: string) {
+  const ext = fileExtension(name)
+  if (['pdf'].includes(ext)) return { Icon: FileText, color: 'text-red-600', bg: 'bg-red-50' }
+  if (['doc', 'docx'].includes(ext)) return { Icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' }
+  if (['xls', 'xlsx', 'csv'].includes(ext))
+    return { Icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'bg-emerald-50' }
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext))
+    return { Icon: ImageIcon, color: 'text-purple-600', bg: 'bg-purple-50' }
+  if (['mp4', 'mov', 'webm'].includes(ext))
+    return { Icon: Film, color: 'text-indigo-600', bg: 'bg-indigo-50' }
+  return { Icon: FileText, color: 'text-slate-600', bg: 'bg-slate-100' }
+}
+
+function relativeTime(from: Date, to: Date): string {
+  const diffMs = to.getTime() - from.getTime()
+  const abs = Math.abs(diffMs)
+  const min = Math.round(abs / 60_000)
+  const hr = Math.round(abs / 3_600_000)
+  const day = Math.round(abs / 86_400_000)
+  const past = diffMs >= 0
+  const phrase = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
+  let core: string
+  if (min < 60) core = phrase(Math.max(1, min), 'minute')
+  else if (hr < 24) core = phrase(hr, 'hour')
+  else core = phrase(day, 'day')
+  return past ? `${core} ago` : `in ${core}`
+}
+
+export default function AssignmentUpload({
+  assignmentId,
+  deadlineAt,
+}: {
+  assignmentId: string
+  deadlineAt?: string | null
+}) {
   const queryClient = useQueryClient()
   const [uploading, setUploading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
-  /** Shown while files POST to the server (bytes sent — not server/Drive processing). */
+  const [unsubmitConfirmOpen, setUnsubmitConfirmOpen] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
   const [uploadUi, setUploadUi] = useState<{
     fileLabel: string
     fileIndex: number
@@ -58,12 +103,8 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
     overallPercent: number
   } | null>(null)
 
-  /** Toast only — survives scroll and stays obvious on small screens / WebView. */
   const reportIssue = useCallback((title: string, message: string) => {
-    toast.error(title, {
-      description: message,
-      duration: UPLOAD_ISSUE_TOAST_MS,
-    })
+    toast.error(title, { description: message, duration: UPLOAD_ISSUE_TOAST_MS })
   }, [])
 
   const loadSubmission = useCallback(async () => {
@@ -72,17 +113,12 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
     )
     const data = (await res.json().catch(() => ({}))) as {
       submission: ApiSubmission
-      files: {
-        id: string
-        file_url: string
-        original_name: string
-      }[]
+      files: { id: string; file_url: string; original_name: string }[]
       error?: string
     }
     if (!res.ok) {
       throw new Error(
-        data.error ??
-          `Could not load submission (HTTP ${res.status}). Check connection or try again.`,
+        data.error ?? `Could not load submission (HTTP ${res.status}). Check connection or try again.`,
       )
     }
     return {
@@ -116,56 +152,75 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
 
   const graded = !!submission?.gradedAt
   const turnedIn = !!submission?.isTurnedIn
-
-  const isPassed = submission?.isPassed ?? false;
-  const isLocked = graded && isPassed;
-
-  const canEdit = !isLocked && !turnedIn;
-  const canUnsubmit = !isLocked && turnedIn;
+  const isPassed = submission?.isPassed ?? false
+  const isLocked = graded && isPassed
+  const canEdit = !isLocked && !turnedIn
+  const canUnsubmit = !isLocked && turnedIn
   const statusLabel = graded ? 'Graded' : turnedIn ? 'Turned in' : 'Draft'
 
-  /** Pass a snapshot `Array.from(input.files)` so the list survives input reset after await. */
+  const deadlineDate = useMemo(() => (deadlineAt ? new Date(deadlineAt) : null), [deadlineAt])
+  const turnedInDate = useMemo(
+    () => (submission?.turnedInAt ? new Date(submission.turnedInAt) : null),
+    [submission?.turnedInAt],
+  )
+  const now = useMemo(() => new Date(), [submissionQuery.dataUpdatedAt])
+  const isOverdue = !!(deadlineDate && !turnedIn && now > deadlineDate)
+  const isLate = !!(deadlineDate && turnedInDate && turnedInDate > deadlineDate)
+
+  const timingLine = (() => {
+    if (turnedInDate) {
+      return `Submitted ${relativeTime(turnedInDate, now)}${
+        isLate ? ' — past the deadline' : ''
+      }`
+    }
+    if (deadlineDate) {
+      const rel = relativeTime(deadlineDate, now)
+      return now > deadlineDate ? `Overdue ${rel}` : `Due ${rel}`
+    }
+    return null
+  })()
+
   async function handleAddFiles(picked: File[]) {
     if (!picked.length) return
-  
     setUploading(true)
-
     try {
       const supabase = createClient()
       const { data, error: authError } = await supabase.auth.getUser()
-  
       if (authError || !data?.user) {
         reportIssue('Assignment upload', 'You must be signed in.')
         return
       }
-  
       if (files.length + picked.length > MAX_FILES_PER_SUBMISSION) {
         reportIssue('Assignment upload', `You can attach up to ${MAX_FILES_PER_SUBMISSION} files.`)
         return
       }
-  
       for (const file of picked) {
         if (file.size > MAX_FILE_BYTES) {
-          reportIssue('Assignment upload', `"${file.name}" is too large (max ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB).`)
+          reportIssue(
+            'Assignment upload',
+            `"${file.name}" is too large (max ${Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB).`,
+          )
           return
         }
         if (!isAllowedAssignmentMime(file.type, file.name)) {
           reportIssue(
             'Assignment upload',
             `"${file.name}" is not an allowed type (PDF, Word, Excel, CSV, images, or MP4).` +
-            (!file.type ? ' Your device did not report a file type — try picking from the Files app.' : ` (detected: ${file.type})`)
+              (!file.type
+                ? ' Your device did not report a file type — try picking from the Files app.'
+                : ` (detected: ${file.type})`),
           )
           return
         }
         if (IS_ANDROID && file.size > ANDROID_WARN_BYTES) {
           reportIssue(
             'File too large for mobile',
-            `"${file.name}" is ${Math.round(file.size / (1024 * 1024))} MB. Please keep files under 50 MB on mobile, or upload from a desktop browser.`
+            `"${file.name}" is ${Math.round(file.size / (1024 * 1024))} MB. Please keep files under 50 MB on mobile, or upload from a desktop browser.`,
           )
           return
         }
       }
-  
+
       const n = picked.length
       for (let i = 0; i < n; i++) {
         const file = picked[i]
@@ -174,14 +229,12 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
           'Content-Type': file.type || 'application/octet-stream',
           'X-File-Name': encodeURIComponent(file.name),
         }
-
         setUploadUi({
           fileLabel: file.name,
           fileIndex: i + 1,
           fileTotal: n,
           overallPercent: Math.round((i / n) * UPLOAD_PROGRESS_MAX_IN_FLIGHT),
         })
-
         const res = await postFileWithRetry(
           url,
           file,
@@ -233,9 +286,10 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
         overallPercent: 100,
       })
 
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assignmentSubmission({ assignmentId }) })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignmentSubmission({ assignmentId }),
+      })
       await new Promise((r) => setTimeout(r, 450))
-  
     } catch (e) {
       reportIssue('Assignment upload', getFetchErrorMessage(e))
     } finally {
@@ -248,22 +302,24 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
     setActionLoading(true)
     try {
       const q =
-        fileId === 'legacy'
-          ? `?assignmentId=${encodeURIComponent(assignmentId)}`
-          : ''
-      const res = await fetchWithRetry(`/api/assignments/files/${encodeURIComponent(fileId)}${q}`, {
-        method: 'DELETE',
-      })
+        fileId === 'legacy' ? `?assignmentId=${encodeURIComponent(assignmentId)}` : ''
+      const res = await fetchWithRetry(
+        `/api/assignments/files/${encodeURIComponent(fileId)}${q}`,
+        { method: 'DELETE' },
+      )
       const payload = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
         reportIssue('Assignment file', payload.error ?? 'Could not remove file.')
         return
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assignmentSubmission({ assignmentId }) })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignmentSubmission({ assignmentId }),
+      })
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Network error while removing file.'
-      reportIssue('Assignment file', msg)
+      reportIssue(
+        'Assignment file',
+        e instanceof Error ? e.message : 'Network error while removing file.',
+      )
     } finally {
       setActionLoading(false)
     }
@@ -279,23 +335,21 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
       })
       const payload = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        reportIssue(
-          'Turn in',
-          payload.error ?? `Could not turn in (HTTP ${res.status}).`,
-        )
+        reportIssue('Turn in', payload.error ?? `Could not turn in (HTTP ${res.status}).`)
         return
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assignmentSubmission({ assignmentId }) })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignmentSubmission({ assignmentId }),
+      })
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Network error while turning in.'
-      reportIssue('Turn in', msg)
+      reportIssue('Turn in', e instanceof Error ? e.message : 'Network error while turning in.')
     } finally {
       setActionLoading(false)
     }
   }
 
   async function unsubmit() {
+    setUnsubmitConfirmOpen(false)
     setActionLoading(true)
     try {
       const res = await fetchWithRetry('/api/assignments/unsubmit', {
@@ -305,17 +359,14 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
       })
       const payload = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        reportIssue(
-          'Unsubmit',
-          payload.error ?? `Could not unsubmit (HTTP ${res.status}).`,
-        )
+        reportIssue('Unsubmit', payload.error ?? `Could not unsubmit (HTTP ${res.status}).`)
         return
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assignmentSubmission({ assignmentId }) })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assignmentSubmission({ assignmentId }),
+      })
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Network error while unsubmitting.'
-      reportIssue('Unsubmit', msg)
+      reportIssue('Unsubmit', e instanceof Error ? e.message : 'Network error while unsubmitting.')
     } finally {
       setActionLoading(false)
     }
@@ -331,131 +382,222 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div className="space-y-3 sm:space-y-4">
+      {/* --- Submission status card --- */}
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-800">Submission status</p>
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-              graded
-                ? 'bg-emerald-100 text-emerald-700'
-                : turnedIn
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-slate-200 text-slate-700'
-            }`}
-          >
-            {statusLabel}
-          </span>
+          <p className="text-[13px] sm:text-sm font-semibold text-slate-800">Submission status</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide sm:px-3 sm:py-1 sm:text-xs ${
+                graded
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : turnedIn
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {statusLabel}
+            </span>
+            {isOverdue && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-800 sm:px-3 sm:py-1 sm:text-xs">
+                <AlertTriangle className="h-3 w-3" />
+                Overdue
+              </span>
+            )}
+            {isLate && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 sm:px-3 sm:py-1 sm:text-xs">
+                <Clock3 className="h-3 w-3" />
+                Late
+              </span>
+            )}
+          </div>
         </div>
-        {turnedIn && submission?.turnedInAt && !graded && (
-          <p className="mt-1 text-xs text-slate-600">
-            Submitted on {new Date(submission.turnedInAt).toLocaleString()}
-          </p>
+        {timingLine && (
+          <p className="mt-1.5 text-[12px] sm:text-xs text-slate-600">{timingLine}</p>
         )}
-        {!turnedIn && !graded && (
-          <p className="mt-1 text-xs text-slate-600">
+        {!turnedIn && !graded && !timingLine && (
+          <p className="mt-1.5 text-[12px] sm:text-xs text-slate-600">
             Add your files and click <span className="font-semibold">Turn in</span> when ready.
           </p>
         )}
       </div>
 
+      {/* --- Graded card --- */}
       {graded && submission && (
-        <div className={`rounded-xl border ${submission.isPassed ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-100'} p-4 space-y-2`}>
-          <div className={`flex items-center gap-2 ${submission.isPassed ? 'text-emerald-800' : 'text-red-800'} font-semibold`}>
-            <CheckCircle2 className="h-5 w-5" />
-            Graded
+        <div
+          className={`rounded-lg border ${
+            submission.isPassed ? 'border-emerald-200 bg-emerald-50/60' : 'border-red-200 bg-red-50/70'
+          } p-3 sm:p-4 space-y-3`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div
+              className={`inline-flex items-center gap-1.5 text-sm sm:text-base font-semibold ${
+                submission.isPassed ? 'text-emerald-800' : 'text-red-800'
+              }`}
+            >
+              {submission.isPassed ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <XCircle className="h-5 w-5" />
+              )}
+              {submission.isPassed ? 'Graded — Passed' : 'Graded — Not passed'}
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Score
+              </p>
+              <p
+                className={`text-xl sm:text-2xl font-bold tabular-nums ${
+                  submission.isPassed ? 'text-emerald-700' : 'text-red-700'
+                }`}
+              >
+                {submission.score ?? '—'}
+                {submission.maxScore != null && (
+                  <span className="text-sm font-medium text-slate-400">
+                    {' '}
+                    / {submission.maxScore}
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-          <p className={`text-sm ${submission.isPassed ? 'text-emerald-900' : 'text-red-900'}`}>
-            Score:{' '}
-            <strong>
-              {submission.score ?? '—'}
-              {submission.maxScore != null ? ` / ${submission.maxScore}` : ''}
-            </strong>
-            {submission.isPassed != null && (
-              <span className="ml-2">
-                ({submission.isPassed ? 'Passed' : 'Not passed'})
-              </span>
-            )}
-          </p>
           {submission.feedback && (
-            <p className="text-sm text-slate-900 whitespace-pre-wrap">
-              <span className="font-medium">Feedback:</span> {submission.feedback}
-            </p>
+            <div className="rounded-md border border-white/60 bg-white/70 px-3 py-2.5 sm:px-3 sm:py-3">
+              <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Instructor feedback
+              </p>
+              <ExpandableText
+                text={submission.feedback}
+                className="mt-1 text-[13px] sm:text-sm text-slate-800"
+                clampLines={4}
+              />
+            </div>
           )}
         </div>
       )}
 
+      {/* --- Your work / file list --- */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-700">Your work</p>
+        <p className="text-[13px] sm:text-sm font-medium text-slate-700">Your work</p>
         {files.length === 0 ? (
-          <p className="text-sm text-slate-500">No files attached yet.</p>
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-4 py-6 text-center">
+            <Upload className="h-6 w-6 text-slate-300" />
+            <p className="mt-2 text-[13px] sm:text-sm font-medium text-slate-600">
+              No files attached yet
+            </p>
+            <p className="mt-0.5 text-[11px] sm:text-xs text-slate-400">
+              Pick or drop files below to attach your work.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-2">
-            {files.map((f) => (
-              <li
-                key={f.id}
-                className="border border-slate-200 rounded-xl p-3 flex items-center justify-between bg-white shadow-sm gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
-                    <FileText className="w-5 h-5" />
+            {files.map((f) => {
+              const { Icon, color, bg } = iconForFileName(f.original_name)
+              return (
+                <li
+                  key={f.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm sm:p-3"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                    <div className={`shrink-0 rounded-lg p-2 ${bg} ${color}`}>
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] sm:text-sm font-medium text-slate-900">
+                        {f.original_name}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {fileExtension(f.original_name).toUpperCase() || 'File'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{f.original_name}</p>
+                  <div className="flex shrink-0 items-center gap-1">
                     <a
                       href={f.file_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] sm:text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                     >
-                      Open in Google Drive
+                      Open
+                      <ExternalLink className="h-3 w-3" />
                     </a>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => void removeFile(f.id)}
+                        disabled={actionLoading || uploading}
+                        className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        title="Remove"
+                        aria-label={`Remove ${f.original_name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
-                </div>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => void removeFile(f.id)}
-                    disabled={actionLoading || uploading}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0"
-                    title="Remove"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                )}
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
 
+      {/* --- Dropzone (with drag & drop) --- */}
       {canEdit && (
         <label
-          className={`border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center transition ${
-            uploading ? 'pointer-events-none border-blue-200 bg-blue-50/40' : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50/50'
+          onDragEnter={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (!uploading) setIsDragOver(true)
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setIsDragOver(false)
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setIsDragOver(false)
+            if (uploading) return
+            const dropped = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : []
+            if (dropped.length) void handleAddFiles(dropped)
+          }}
+          className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-all duration-150 sm:p-6 ${
+            uploading
+              ? 'pointer-events-none border-blue-200 bg-blue-50/40'
+              : isDragOver
+                ? 'scale-[1.01] border-solid border-blue-500 bg-blue-100 ring-4 ring-blue-200/60 cursor-copy'
+                : 'border-slate-300 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50'
           }`}
         >
           {uploading && uploadUi ? (
             <>
-              <p className="text-sm font-semibold text-slate-800 mb-3">Uploading…</p>
+              <p className="mb-2 text-[13px] sm:text-sm font-semibold text-slate-800">Uploading…</p>
               <div
-                className="w-full max-w-xs mb-2"
+                className="mb-2 w-full max-w-xs"
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={uploadUi.overallPercent}
                 aria-label={`Upload progress ${uploadUi.overallPercent} percent`}
               >
-                <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
                   <div
                     className="h-full rounded-full bg-blue-600 transition-[width] duration-200 ease-out"
                     style={{ width: `${uploadUi.overallPercent}%` }}
                   />
                 </div>
               </div>
-              <p className="text-lg font-bold tabular-nums text-blue-700">{uploadUi.overallPercent}%</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums text-blue-700">
+                {uploadUi.overallPercent}%
+              </p>
               <p
-                className="text-xs text-slate-500 mt-1 text-center max-w-full px-2 truncate"
+                className="mt-1 max-w-full truncate px-2 text-center text-[11px] sm:text-xs text-slate-500"
                 title={`${uploadUi.fileLabel} — file ${uploadUi.fileIndex} of ${uploadUi.fileTotal}`}
               >
                 {uploadUi.fileLabel}
@@ -465,22 +607,36 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
                 </span>
               </p>
             </>
-          ) : uploading ? (
-            <>
-              <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
-              <p className="text-slate-600 font-medium text-sm text-center">Preparing upload…</p>
-            </>
           ) : (
             <>
-              <Upload className="h-8 w-8 text-slate-300 mb-2" />
-              <p className="text-slate-600 font-medium text-sm text-center">Add files</p>
+              <Upload
+                className={`mb-1.5 transition-all sm:mb-2 ${
+                  isDragOver ? 'h-9 w-9 text-blue-600 sm:h-10 sm:w-10' : 'h-6 w-6 text-slate-300 sm:h-8 sm:w-8'
+                }`}
+              />
+              <p
+                className={`text-center font-medium ${
+                  isDragOver
+                    ? 'text-sm sm:text-base text-blue-700'
+                    : 'text-[13px] sm:text-sm text-slate-600'
+                }`}
+              >
+                {isDragOver ? (
+                  'Drop files to upload'
+                ) : (
+                  <>
+                    <span className="pointer-fine:hidden">Tap to attach files</span>
+                    <span className="hidden pointer-fine:inline">
+                      Drag and drop files here, or click to browse
+                    </span>
+                  </>
+                )}
+              </p>
+              <p className="mt-1 text-center text-[11px] sm:text-xs text-slate-400">
+                PDF, Word, Excel, CSV, images, MP4 · Up to {MAX_FILES_PER_SUBMISSION} files ·{' '}
+                {Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB each
+              </p>
             </>
-          )}
-          {!uploading && (
-            <p className="text-slate-400 text-xs mt-1 text-center">
-              PDF, Word, Excel, CSV, images, MP4 · Up to {MAX_FILES_PER_SUBMISSION} files ·{' '}
-              {Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB each
-            </p>
           )}
           <input
             type="file"
@@ -497,45 +653,55 @@ export default function AssignmentUpload({ assignmentId }: { assignmentId: strin
         </label>
       )}
 
+      {/* --- Actions --- */}
       {!isLocked && (
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => void turnIn()}
-              disabled={
-                actionLoading ||
-                uploading ||
-                files.length === 0
-              }
-              className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 px-6 rounded-lg shadow transition"
-            >
-              {actionLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-              Turn in
-            </button>
-          )}
+        <div className="space-y-2 pt-1 sm:pt-2">
           {canUnsubmit && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
-              <p className="text-sm text-slate-600 flex-1">
-                Your work is turned in. Unsubmit if you need to change or add files.
-              </p>
+            <p className="text-[12px] sm:text-xs text-slate-600">
+              Your work is turned in. Unsubmit if you need to change or add files.
+            </p>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+            {canEdit && (
               <button
                 type="button"
-                onClick={() => void unsubmit()}
-                disabled={actionLoading}
-                className="inline-flex items-center justify-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-semibold py-3 px-6 rounded-lg transition"
+                onClick={() => void turnIn()}
+                disabled={actionLoading || uploading || files.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-700 disabled:opacity-50 sm:px-5 sm:py-2.5"
               >
-                <Undo2 className="h-5 w-5" />
+                {actionLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Turn in
+              </button>
+            )}
+            {canUnsubmit && (
+              <button
+                type="button"
+                onClick={() => setUnsubmitConfirmOpen(true)}
+                disabled={actionLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50 disabled:opacity-50 sm:px-5 sm:py-2.5"
+              >
+                <Undo2 className="h-4 w-4" />
                 Unsubmit
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
+
+      <ConfirmationDialog
+        open={unsubmitConfirmOpen}
+        title="Unsubmit your work?"
+        description="You'll need to turn it in again before the deadline to be graded on time. Your attached files are kept."
+        confirmLabel="Unsubmit"
+        confirmVariant="danger"
+        busy={actionLoading}
+        onCancel={() => setUnsubmitConfirmOpen(false)}
+        onConfirm={() => void unsubmit()}
+      />
     </div>
   )
 }

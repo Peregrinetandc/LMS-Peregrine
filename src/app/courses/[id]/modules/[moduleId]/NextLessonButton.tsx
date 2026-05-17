@@ -30,6 +30,13 @@ export default function NextLessonButton({
     staleTime: Infinity,
   })
   const isCompleted = Boolean(moduleProgressQuery.data?.completed)
+  const quizInProgress = useQuery({
+    queryKey: queryKeys.quizInProgress(),
+    queryFn: () => false,
+    initialData: false,
+    enabled: false,
+    staleTime: Infinity,
+  }).data
 
   useEffect(() => {
     if (!initialCompleted) return
@@ -39,6 +46,7 @@ export default function NextLessonButton({
   }, [currentModuleId, initialCompleted, queryClient])
 
   if (!nextModule) return null
+  if (quizInProgress) return null
 
   const canGoNext = isCompleted && !nextModule.locked
 

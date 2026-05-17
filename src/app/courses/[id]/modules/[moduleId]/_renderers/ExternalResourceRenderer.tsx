@@ -1,4 +1,5 @@
 import ExternalResourceLinks from '@/components/ExternalResourceLinks'
+import ExpandableText from '@/components/ExpandableText'
 import type { LoadedModule } from '../_lib/load-module-page'
 
 export function ExternalResourceRenderer({ data }: { data: LoadedModule }) {
@@ -13,8 +14,8 @@ export function ExternalResourceRenderer({ data }: { data: LoadedModule }) {
         </span>
       </div>
       {description && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] whitespace-pre-wrap text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
-          {description}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
+          <ExpandableText text={description} />
         </div>
       )}
       {externalLinks.length > 0 ? (

@@ -1,8 +1,9 @@
 import { CalendarDays, CheckCircle2, Clock3 } from 'lucide-react'
+import ExpandableText from '@/components/ExpandableText'
 import type { LoadedModule } from '../_lib/load-module-page'
 
 export function LiveSessionRenderer({ data }: { data: LoadedModule }) {
-  const { title, sessionFields, contentUrl, isEnrolled, sessionAttendanceMarked } = data
+  const { title, description, sessionFields, contentUrl, isEnrolled, sessionAttendanceMarked } = data
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -14,6 +15,11 @@ export function LiveSessionRenderer({ data }: { data: LoadedModule }) {
           </span>
         </div>
       </div>
+      {description && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
+          <ExpandableText text={description} />
+        </div>
+      )}
       <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 text-[13px] text-indigo-900 sm:px-4 sm:py-3 sm:text-sm">
         <p className="font-semibold">Live session instructions</p>
         <ul className="mt-1 list-disc space-y-1 pl-5 text-indigo-800">

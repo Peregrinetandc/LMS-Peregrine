@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Menu, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/query-keys'
 
 export default function ModulesDrawerShell({
   children,
@@ -12,6 +14,17 @@ export default function ModulesDrawerShell({
 }) {
   const [open, setOpen] = useState(false)
   const drawerId = useId()
+  const quizInProgress = useQuery({
+    queryKey: queryKeys.quizInProgress(),
+    queryFn: () => false,
+    initialData: false,
+    enabled: false,
+    staleTime: Infinity,
+  }).data
+
+  useEffect(() => {
+    if (quizInProgress && open) setOpen(false)
+  }, [quizInProgress, open])
 
   useEffect(() => {
     if (!open) return
@@ -43,18 +56,20 @@ export default function ModulesDrawerShell({
 
   return (
     <div className="relative min-h-[calc(100vh-8rem)]">
-      <div className="sticky top-20 z-20 mb-4 w-fit">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-expanded={open}
-          aria-controls={drawerId}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          <Menu className="h-4 w-4" />
-          Syllabus
-        </button>
-      </div>
+      {!quizInProgress && (
+        <div className="sticky top-20 z-20 mb-4 w-fit">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-expanded={open}
+            aria-controls={drawerId}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <Menu className="h-4 w-4" />
+            Syllabus
+          </button>
+        </div>
+      )}
 
       <div className="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:p-8">
         {children}

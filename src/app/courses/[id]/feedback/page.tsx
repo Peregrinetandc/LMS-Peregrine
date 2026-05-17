@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, MessageSquare } from 'lucide-react'
 import { AppCard } from '@/components/ui/primitives'
+import ExpandableText from '@/components/ExpandableText'
 import { ROLES } from '@/lib/roles'
 
 export default async function CourseFeedbackPage({ params }: { params: Promise<{ id: string }> }) {
@@ -108,8 +109,8 @@ export default async function CourseFeedbackPage({ params }: { params: Promise<{
                   {' · '}
                   {new Date(row.submitted_at).toLocaleString()}
                 </p>
-                <div className="text-sm text-slate-800 whitespace-pre-wrap border-l-4 border-rose-100 pl-3">
-                  {row.body}
+                <div className="border-l-4 border-rose-100 pl-3">
+                  <ExpandableText text={row.body} className="text-sm text-slate-800" clampLines={4} />
                 </div>
                 <Link
                   href={`/courses/${courseId}/modules/${row.module_id}`}

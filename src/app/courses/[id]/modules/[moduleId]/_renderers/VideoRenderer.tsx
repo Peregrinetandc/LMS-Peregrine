@@ -1,4 +1,5 @@
 import VideoModule from '@/components/VideoModule'
+import ExpandableText from '@/components/ExpandableText'
 import type { LoadedModule } from '../_lib/load-module-page'
 
 export function VideoRenderer({ data }: { data: LoadedModule }) {
@@ -12,8 +13,8 @@ export function VideoRenderer({ data }: { data: LoadedModule }) {
         </span>
       </div>
       {data.description && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] whitespace-pre-wrap text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
-          {data.description}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
+          <ExpandableText text={data.description} />
         </div>
       )}
       <VideoModule key={data.moduleId} moduleId={data.moduleId} contentUrl={data.contentUrl} />

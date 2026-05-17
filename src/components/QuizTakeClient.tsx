@@ -75,9 +75,8 @@ export default function QuizTakeClient({
   const answersRef = useRef(answers)
   answersRef.current = answers
   const [result, setResult] = useState<QuizResult | null>(initialResult)
-  const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmKind, setConfirmKind] = useState<'all-answered' | 'has-unanswered' | null>(null)
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const [pendingLeaveHref, setPendingLeaveHref] = useState<string | null>(null)
   const [quizStarted, setQuizStarted] = useState(false)
@@ -110,17 +109,8 @@ export default function QuizTakeClient({
     },
   })
 
-  const submitQuiz = useCallback(async (isAuto = false) => {
-    setConfirmOpen(false)
-    setError('')
-    if (!isAuto) {
-      for (const q of questions) {
-        if (!answersRef.current[q.id]) {
-          setError('Please answer every question.')
-          return
-        }
-      }
-    }
+  const submitQuiz = useCallback(async () => {
+    setConfirmKind(null)
     setSubmitting(true)
     try {
       const data = await quizSubmitMutation.mutateAsync({
@@ -143,11 +133,11 @@ export default function QuizTakeClient({
       await queryClient.invalidateQueries({ queryKey: queryKeys.quizResult({ moduleId }) })
       window.localStorage.removeItem(draftKey)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      toast.error(err instanceof Error ? err.message : 'Network error')
     } finally {
       setSubmitting(false)
     }
-  }, [questions, moduleId, queryClient, draftKey, quizSubmitMutation])
+  }, [moduleId, queryClient, draftKey, quizSubmitMutation])
 
   const submitQuizRef = useRef(submitQuiz)
   submitQuizRef.current = submitQuiz
@@ -161,7 +151,7 @@ export default function QuizTakeClient({
         if (rem <= 0 && !timeUpHandledRef.current) {
           timeUpHandledRef.current = true
           setTimeExpired(true)
-          void submitQuizRef.current(true)
+          void submitQuizRef.current()
           window.localStorage.removeItem(draftKey)
         }
       } else {
@@ -178,6 +168,14 @@ export default function QuizTakeClient({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }, [result]);
+
+useEffect(() => {
+  const active = quizStarted && !result
+  queryClient.setQueryData(queryKeys.quizInProgress(), active)
+  return () => {
+    queryClient.setQueryData(queryKeys.quizInProgress(), false)
+  }
+}, [queryClient, quizStarted, result]);
 
 useEffect(() => {
   if (!timeExpired || result) return
@@ -311,10 +309,9 @@ useEffect(() => {
                   onClick={() => {
                     setResult(null)
                     setAnswers({})
-                    setError('')
                     setReviewRows([])
                     setSubmittedNow(false)
-                    setConfirmOpen(false)
+                    setConfirmKind(null)
                     setQuizStarted(false)
                     setStartedAt(Date.now())
                     setElapsedSec(0)
@@ -418,14 +415,7 @@ useEffect(() => {
   
   function requestSubmit() {
     if (timeExpired) return
-    setError('')
-    for (const q of questions) {
-      if (!answers[q.id]) {
-        setError('Please answer every question.')
-        return
-      }
-    }
-    setConfirmOpen(true)
+    setConfirmKind(unansweredCount > 0 ? 'has-unanswered' : 'all-answered')
   }
 
   if (!quizStarted) {
@@ -576,8 +566,6 @@ useEffect(() => {
           </span>
         )}
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
       <div className="hidden lg:block">
         <button
           type="button"
@@ -608,12 +596,17 @@ useEffect(() => {
       </div>
 
       <ConfirmationDialog
-        open={confirmOpen}
-        title="Submit quiz?"
-        description="This submission will be checked now. Marks and pass status use your best attempt."
-        confirmLabel="Confirm submit"
+        open={confirmKind !== null}
+        title={confirmKind === 'has-unanswered' ? 'Submit with unanswered questions?' : 'Submit quiz?'}
+        description={
+          confirmKind === 'has-unanswered'
+            ? `You have ${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'}. They will be marked incorrect. You can still submit if you want.`
+            : 'This submission will be checked now. Marks and pass status use your best attempt.'
+        }
+        confirmLabel={confirmKind === 'has-unanswered' ? 'Submit anyway' : 'Confirm submit'}
+        confirmVariant={confirmKind === 'has-unanswered' ? 'danger' : undefined}
         busy={submitting}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => setConfirmKind(null)}
         onConfirm={() => void submitQuiz()}
       />
       <ConfirmationDialog

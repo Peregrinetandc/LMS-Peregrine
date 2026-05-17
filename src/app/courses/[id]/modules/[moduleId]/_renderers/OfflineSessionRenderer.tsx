@@ -1,4 +1,5 @@
 import { CalendarDays, CheckCircle2, Clock3, MapPin } from 'lucide-react'
+import ExpandableText from '@/components/ExpandableText'
 import type { LoadedModule } from '../_lib/load-module-page'
 
 export function OfflineSessionRenderer({ data }: { data: LoadedModule }) {
@@ -15,8 +16,8 @@ export function OfflineSessionRenderer({ data }: { data: LoadedModule }) {
         </div>
       </div>
       {description && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] whitespace-pre-wrap text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
-          {description}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
+          <ExpandableText text={description} />
         </div>
       )}
       <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-[13px] text-amber-900 sm:px-4 sm:py-3 sm:text-sm">

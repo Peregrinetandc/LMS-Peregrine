@@ -1,4 +1,5 @@
 import AssignmentUpload from '@/components/AssignmentUpload'
+import ExpandableText from '@/components/ExpandableText'
 import { formatLocalDisplay } from '@/lib/timestamp'
 import type { LoadedModule } from '../_lib/load-module-page'
 
@@ -26,8 +27,8 @@ export function AssignmentRenderer({ data }: { data: LoadedModule }) {
         </span>
       </div>
       {assignmentRow.description && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] whitespace-pre-wrap text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
-          {assignmentRow.description}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700 sm:px-4 sm:py-3 sm:text-sm">
+          <ExpandableText text={assignmentRow.description} />
         </div>
       )}
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -46,7 +47,7 @@ export function AssignmentRenderer({ data }: { data: LoadedModule }) {
           <p className="mt-0.5 sm:mt-1 font-medium">{formatLocalDisplay(assignmentRow.deadline_at)}</p>
         </div>
       )}
-      <AssignmentUpload assignmentId={assignmentRow.id} />
+      <AssignmentUpload assignmentId={assignmentRow.id} deadlineAt={assignmentRow.deadline_at} />
     </div>
   )
 }
