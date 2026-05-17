@@ -66,6 +66,8 @@ function iconForFileName(name: string) {
     return { Icon: ImageIcon, color: 'text-purple-600', bg: 'bg-purple-50' }
   if (['mp4', 'mov', 'webm'].includes(ext))
     return { Icon: Film, color: 'text-indigo-600', bg: 'bg-indigo-50' }
+  if (['txt', 'md', 'rtf'].includes(ext))
+    return { Icon: FileText, color: 'text-slate-700', bg: 'bg-slate-100' }
   return { Icon: FileText, color: 'text-slate-600', bg: 'bg-slate-100' }
 }
 
@@ -205,7 +207,7 @@ export default function AssignmentUpload({
         if (!isAllowedAssignmentMime(file.type, file.name)) {
           reportIssue(
             'Assignment upload',
-            `"${file.name}" is not an allowed type (PDF, Word, Excel, CSV, images, or MP4).` +
+            `"${file.name}" is not an allowed type (PDF, Word, Excel, CSV, TXT, images, or MP4).` +
               (!file.type
                 ? ' Your device did not report a file type — try picking from the Files app.'
                 : ` (detected: ${file.type})`),
@@ -480,17 +482,7 @@ export default function AssignmentUpload({
       {/* --- Your work / file list --- */}
       <div className="space-y-2">
         <p className="text-[13px] sm:text-sm font-medium text-slate-700">Your work</p>
-        {files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-4 py-6 text-center">
-            <Upload className="h-6 w-6 text-slate-300" />
-            <p className="mt-2 text-[13px] sm:text-sm font-medium text-slate-600">
-              No files attached yet
-            </p>
-            <p className="mt-0.5 text-[11px] sm:text-xs text-slate-400">
-              Pick or drop files below to attach your work.
-            </p>
-          </div>
-        ) : (
+        {files.length > 0 && (
           <ul className="space-y-2">
             {files.map((f) => {
               const { Icon, color, bg } = iconForFileName(f.original_name)
@@ -633,7 +625,7 @@ export default function AssignmentUpload({
                 )}
               </p>
               <p className="mt-1 text-center text-[11px] sm:text-xs text-slate-400">
-                PDF, Word, Excel, CSV, images, MP4 · Up to {MAX_FILES_PER_SUBMISSION} files ·{' '}
+                PDF, Word, Excel, CSV, TXT, images, MP4 · Up to {MAX_FILES_PER_SUBMISSION} files ·{' '}
                 {Math.floor(MAX_FILE_BYTES / (1024 * 1024))} MB each
               </p>
             </>
@@ -642,7 +634,7 @@ export default function AssignmentUpload({
             type="file"
             multiple
             className="sr-only"
-            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.csv,.xlsx,.xls,.mp4,application/pdf,image/*,video/mp4,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.csv,.xlsx,.xls,.mp4,.txt,application/pdf,image/*,video/mp4,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             disabled={uploading || files.length >= MAX_FILES_PER_SUBMISSION}
             onChange={(e) => {
               const snapshot = e.target.files ? Array.from(e.target.files) : []

@@ -17,6 +17,8 @@ const ALLOWED = new Set([
   'application/csv',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
   'application/vnd.ms-excel', // .xls
+  // Plain text
+  'text/plain',
 ])
 
 export function isAllowedAssignmentMime(mime: string, fileName: string): boolean {
@@ -34,7 +36,8 @@ export function isAllowedAssignmentMime(mime: string, fileName: string): boolean
     lower.endsWith('.csv') ||
     lower.endsWith('.xlsx') ||
     lower.endsWith('.xls') ||
-    lower.endsWith('.mp4')
+    lower.endsWith('.mp4') ||
+    lower.endsWith('.txt')
   )
 }
 
@@ -55,5 +58,6 @@ export function guessMime(fileName: string): string {
   }
   if (lower.endsWith('.xls')) return 'application/vnd.ms-excel'
   if (lower.endsWith('.mp4')) return 'video/mp4'
+  if (lower.endsWith('.txt')) return 'text/plain'
   return 'application/octet-stream'
 }
