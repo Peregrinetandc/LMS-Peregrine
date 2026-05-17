@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ErrorAlert } from '@/components/ui/error-alert'
 import {
@@ -17,7 +17,13 @@ import {
   type VerifyState,
 } from './actions'
 
-const RESEND_COOLDOWN_SECONDS = 30
+const RESEND_COOLDOWN_SECONDS = 60
+
+function parseRateLimitSeconds(message: string | null): number | null {
+  if (!message) return null
+  const m = message.match(/(\d+)\s*seconds?/i)
+  return m ? Number(m[1]) : null
+}
 
 function VerifySubmit({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus()
@@ -57,14 +63,20 @@ export default function VerifyForm({
     { ok: false, error: null },
   )
 
-  const [cooldown, setCooldown] = useState(0)
-  const lastResendOk = useRef(false)
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS)
+  const lastResendSignal = useRef(0)
 
   useEffect(() => {
-    if (resendState.ok && !lastResendOk.current) {
+    const signal = (resendState.ok ? 1 : 0) + (resendState.error ? 2 : 0)
+    if (signal === 0 || signal === lastResendSignal.current) return
+    lastResendSignal.current = signal
+
+    if (resendState.ok) {
       setCooldown(RESEND_COOLDOWN_SECONDS)
+      return
     }
-    lastResendOk.current = resendState.ok
+    const wait = parseRateLimitSeconds(resendState.error)
+    if (wait) setCooldown(wait)
   }, [resendState])
 
   useEffect(() => {
@@ -115,7 +127,7 @@ export default function VerifyForm({
       <form action={resendAction} className="flex flex-col items-center">
         <input type="hidden" name="email" value={email} />
         <ResendButton cooldown={cooldown} />
-        {resendState.error ? (
+        {resendState.error && !parseRateLimitSeconds(resendState.error) ? (
           <p className="mt-2 text-xs text-red-700">{resendState.error}</p>
         ) : null}
       </form>
@@ -126,6 +138,25 @@ export default function VerifyForm({
 function ResendButton({ cooldown }: { cooldown: number }) {
   const { pending } = useFormStatus()
   const disabled = pending || cooldown > 0
+
+  if (cooldown > 0 && !pending) {
+    return (
+      <div className="flex flex-col items-center gap-1 text-center">
+        <div
+          role="timer"
+          aria-live="polite"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground"
+        >
+          <Timer className="h-3.5 w-3.5" aria-hidden />
+          Resend available in <span className="tabular-nums text-foreground">{cooldown}s</span>
+        </div>
+        <button type="submit" disabled className="sr-only">
+          Resend code
+        </button>
+      </div>
+    )
+  }
+
   return (
     <Button
       type="submit"
@@ -134,11 +165,14 @@ function ResendButton({ cooldown }: { cooldown: number }) {
       disabled={disabled}
       className="text-sm"
     >
-      {pending
-        ? 'Sending...'
-        : cooldown > 0
-          ? `Resend code in ${cooldown}s`
-          : "Didn't get it? Resend code"}
+      {pending ? (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          Sending...
+        </>
+      ) : (
+        "Didn't get it? Resend code"
+      )}
     </Button>
   )
 }

@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 
 export async function signup(formData: FormData) {
@@ -26,36 +27,24 @@ export async function signup(formData: FormData) {
     fail('Password must be at least 6 characters.')
   }
 
-  const admin = createAdminClient()
-  if (!admin) {
-    fail('Server is not configured for signup. Contact an administrator.')
-  }
-
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: 'signup',
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      data: { full_name: fullName, role: 'learner' },
-    },
+    options: { data: { full_name: fullName, role: 'learner' } },
   })
 
   if (error) {
     fail(error.message)
   }
 
-  if (data.user) {
-    const { error: upsertErr } = await admin.from('profiles').upsert(
+  const admin = createAdminClient()
+  if (admin && data.user) {
+    await admin.from('profiles').upsert(
       { id: data.user.id, full_name: fullName, email, role: 'learner' },
       { onConflict: 'id' },
     )
-    if (upsertErr) {
-      fail(upsertErr.message)
-    }
   }
-
-  // DEV: surface the OTP since SMTP isn't wired yet. Remove once Resend is configured.
-  console.log(`[signup OTP] ${email} → ${data.properties?.email_otp}`)
 
   redirect(
     `/signup/verify?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectTo)}`,
