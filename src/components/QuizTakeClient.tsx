@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog'
+import ExpandableText from '@/components/ExpandableText'
 import { toast } from 'sonner'
 import { queryKeys } from '@/lib/query/query-keys'
 import { fetchWithRetry } from '@/lib/network-retry'
@@ -423,14 +424,8 @@ useEffect(() => {
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">Before you start</h3>
         {introText ? (
-          <div className="rounded-lg border border-cyan-100 bg-cyan-50/60 px-3 py-2 text-sm text-slate-700 space-y-1">
-            {introText.split('\n').map((line, i) =>
-              line.trim() ? (
-                <p key={i} dir={textDir(line)}>{line}</p>
-              ) : (
-                <div key={i} className="h-2" />
-              )
-            )}
+          <div className="rounded-lg border border-cyan-100 bg-cyan-50/60 px-3 py-2 text-sm text-slate-700">
+            <ExpandableText text={introText} clampLines={6} />
           </div>
         ) : null}
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">

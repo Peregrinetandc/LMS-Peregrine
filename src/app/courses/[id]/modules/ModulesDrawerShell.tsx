@@ -87,7 +87,7 @@ export default function ModulesDrawerShell({
           <aside
             id={drawerId}
             aria-label="Course syllabus navigation"
-            className="fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-full max-w-md flex-col border-r border-slate-200 bg-white p-3 shadow-2xl sm:max-w-lg"
+            className="fixed inset-y-0 left-0 z-50 flex h-dvh w-full max-w-md flex-col border-r border-slate-200 bg-white p-3 shadow-2xl sm:max-w-lg"
           >
             {/* Single scroll region so wheel/touch works over the title bar too, not only below it */}
             <div
