@@ -5,18 +5,18 @@ export function LiveSessionRenderer({ data }: { data: LoadedModule }) {
   const { title, sessionFields, contentUrl, isEnrolled, sessionAttendanceMarked } = data
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="lg:text-lg text-base font-bold text-slate-900">{title}</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-700">
+    <div className="space-y-3 sm:space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <h2 className="text-base sm:text-lg font-bold text-slate-900">{title}</h2>
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-purple-700 sm:px-3 sm:py-1 sm:text-xs">
             Live session
           </span>
         </div>
       </div>
-      <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-900">
+      <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 text-[13px] text-indigo-900 sm:px-4 sm:py-3 sm:text-sm">
         <p className="font-semibold">Live session instructions</p>
-        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-indigo-800">
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-indigo-800">
           <li>Join 5-10 minutes before start time.</li>
           <li>Use your real name so attendance is recorded correctly.</li>
           <li>Keep mic muted when not speaking and participate actively.</li>
@@ -25,7 +25,7 @@ export function LiveSessionRenderer({ data }: { data: LoadedModule }) {
       {isEnrolled && (
         <div className="flex justify-end">
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide sm:px-3 sm:py-1 sm:text-xs ${
               sessionAttendanceMarked
                 ? 'bg-emerald-100 text-emerald-800'
                 : 'bg-amber-100 text-amber-800'
@@ -37,8 +37,8 @@ export function LiveSessionRenderer({ data }: { data: LoadedModule }) {
         </div>
       )}
       {(sessionFields.session_start_at || sessionFields.session_end_at) && (
-        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Schedule</p>
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-slate-500">Schedule</p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {sessionFields.session_start_at && (
               <div className="rounded-lg border border-purple-200 bg-purple-50/60 px-3 py-2">
@@ -66,7 +66,7 @@ export function LiveSessionRenderer({ data }: { data: LoadedModule }) {
           href={contentUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 font-semibold text-white transition hover:bg-indigo-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 sm:px-6 sm:text-base"
         >
           Join Session →
         </a>

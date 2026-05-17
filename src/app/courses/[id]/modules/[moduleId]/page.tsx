@@ -34,8 +34,8 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
             secondaryErrorsSummary={null}
           />
         )}
-        <div className="mx-auto max-w-lg space-y-3 py-16 text-center">
-          <h1 className="text-lg font-semibold text-slate-900">Could not load this lesson</h1>
+        <div className="mx-auto max-w-lg space-y-3 py-10 text-center sm:py-16">
+          <h1 className="text-base sm:text-lg font-semibold text-slate-900">Could not load this lesson</h1>
           <p className="text-sm text-slate-600">{result.error}</p>
           <Link
             href={`/courses/${courseId}`}
@@ -78,7 +78,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 lg:mt-4">
+    <div className="mx-auto w-full space-y-3 sm:max-w-3xl sm:space-y-5 lg:mt-4">
       {showLessonDiagnostics && <ModuleLessonDiagnostics {...diagnosticsProps} />}
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
         Week {d.weekIndex ?? 1}

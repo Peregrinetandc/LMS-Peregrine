@@ -283,7 +283,7 @@ export default function VideoModule({ moduleId, contentUrl }: VideoModuleProps) 
       <video
         src={contentUrl}
         controls
-        className="w-full rounded-xl shadow-lg bg-black max-h-[70vh]"
+        className="w-full rounded-lg sm:rounded-xl shadow-md sm:shadow-lg bg-black max-h-[60vh] sm:max-h-[70vh]"
         onTimeUpdate={(e) => {
           const v = e.currentTarget
           if (!v.duration || Number.isNaN(v.duration)) return

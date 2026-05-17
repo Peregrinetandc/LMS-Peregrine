@@ -18,22 +18,22 @@ export function QuizRenderer({ data }: { data: LoadedModule }) {
   } = data
 
   return (
-    <div className=" space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="lg:text-lg text-base font-bold text-slate-900">{title}</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-700">
+    <div className="space-y-3 sm:space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <h2 className="text-base sm:text-lg font-bold text-slate-900">{title}</h2>
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="rounded-full bg-cyan-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-700 sm:px-3 sm:py-1 sm:text-xs">
             MCQ Exam
           </span>
           {!quizSettings.quiz_allow_retest && (
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 sm:px-3 sm:py-1 sm:text-xs">
               Retest disabled
             </span>
           )}
         </div>
       </div>
       {isCourseStaff && (
-        <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+        <p className="text-[13px] sm:text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
           Instructor preview. Edit questions in <strong>Course builder</strong>. Passing bar:{' '}
           {passingPct}% correct.
         </p>
@@ -44,7 +44,7 @@ export function QuizRenderer({ data }: { data: LoadedModule }) {
             <p className="text-sm text-amber-700">No questions in this quiz yet.</p>
           ) : (
             quizQuestionsStaff.map((q, i) => (
-              <div key={q.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50/60">
+              <div key={q.id} className="border border-slate-200 rounded-lg p-3 sm:p-4 bg-slate-50/60">
                 <p className="font-medium text-slate-900 mb-2">
                   {i + 1}. {q.prompt}
                 </p>

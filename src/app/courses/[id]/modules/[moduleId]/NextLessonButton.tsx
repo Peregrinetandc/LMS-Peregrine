@@ -48,7 +48,7 @@ export default function NextLessonButton({
         {canGoNext ? (
           <Link
             href={`/courses/${courseId}/modules/${nextModule.id}`}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 sm:px-5 sm:py-2.5"
           >
             Next lesson
             <ArrowRight className="h-4 w-4" />
@@ -57,7 +57,7 @@ export default function NextLessonButton({
           <button
             type="button"
             disabled
-            className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600"
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 sm:px-5 sm:py-2.5"
             title={nextDisabledReason}
           >
             Next lesson
