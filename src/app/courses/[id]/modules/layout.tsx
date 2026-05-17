@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import ModuleSidebar from './ModuleSidebar'
 import ModulesDrawerShell from './ModulesDrawerShell'
-import { groupModulesByWeek } from '@/lib/course-modules'
+import { groupModulesBySection } from '@/lib/course-modules'
 import { getLearnerModuleStatusMap } from '@/lib/learner-module-status'
 import { ROLES } from '@/lib/roles'
 
@@ -20,13 +20,18 @@ export default async function ModulesLayout({
   if (!user) redirect('/login')
 
   // Step 1: Run all independent queries in parallel
-  const [enrollmentResult, courseResult, profileResult, modulesResult] = await Promise.all([
+  const [enrollmentResult, courseResult, profileResult, modulesResult, sectionsResult] = await Promise.all([
     supabase.from('enrollments').select('id').eq('course_id', id).eq('learner_id', user.id).maybeSingle(),
     supabase.from('courses').select('title, course_code, instructor_id').eq('id', id).single(),
     supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
     supabase
       .from('modules')
-      .select('id, title, type, available_from, sort_order, week_index')
+      .select('id, title, type, available_from, sort_order, week_index, section_id')
+      .eq('course_id', id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('sections')
+      .select('id, title, sort_order')
       .eq('course_id', id)
       .order('sort_order', { ascending: true }),
   ])
@@ -39,7 +44,7 @@ export default async function ModulesLayout({
     course.instructor_id === user.id || profileResult.data?.role === ROLES.ADMIN
 
   const modules = modulesResult.data ?? []
-  const sectionGroups = groupModulesByWeek(modules)
+  const sectionGroups = groupModulesBySection(modules, sectionsResult.data ?? [])
 
   // Step 2: Module status RPC (depends on enrollment check + modules)
   const moduleUi =

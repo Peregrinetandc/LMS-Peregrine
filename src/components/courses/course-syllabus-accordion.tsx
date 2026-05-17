@@ -20,6 +20,7 @@ export type SyllabusWeekMod = {
   href: string
   timeLocked: boolean
   lockDateLabel: string | null
+  weekIndex: number | null
   ui: {
     complete: boolean
     overdue: boolean
@@ -37,7 +38,7 @@ export type SyllabusWeek = {
 type Props = { weeks: SyllabusWeek[] }
 
 export function CourseSyllabusAccordion({ weeks }: Props) {
-  const defaultOpen = weeks.map((w) => w.id)
+  const defaultOpen = weeks.length > 0 ? [weeks[0].id] : []
 
   return (
     <Accordion
@@ -66,7 +67,7 @@ export function CourseSyllabusAccordion({ weeks }: Props) {
             {section.mods.length === 0 ? (
               <div className="px-5 pb-3 sm:px-8">
                 <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                  No lessons in this week.
+                  No lessons in this section yet.
                 </p>
               </div>
             ) : (
@@ -90,6 +91,11 @@ export function CourseSyllabusAccordion({ weeks }: Props) {
                           />
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:justify-end">
+                          {mod.weekIndex != null && (
+                            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Wk {mod.weekIndex}
+                            </span>
+                          )}
                           {mod.timeLocked && mod.lockDateLabel && (
                             <span className="inline-flex items-center gap-1">
                               <Lock className="size-3 shrink-0" aria-hidden />
@@ -112,6 +118,11 @@ export function CourseSyllabusAccordion({ weeks }: Props) {
                           <span className="flex-1 truncate text-xs text-muted-foreground">{mod.title}</span>
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-2 justify-end">
+                          {mod.weekIndex != null && (
+                            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Wk {mod.weekIndex}
+                            </span>
+                          )}
                           {mod.timeLocked && mod.lockDateLabel && (
                             <span className="text-xs text-muted-foreground">
                               Unlocks at {mod.lockDateLabel}
@@ -136,6 +147,11 @@ export function CourseSyllabusAccordion({ weeks }: Props) {
                         </span>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        {mod.weekIndex != null && (
+                          <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Wk {mod.weekIndex}
+                          </span>
+                        )}
                         {mod.ui.complete && (
                           <span className="shrink-0 text-emerald-600" title="Completed" aria-label="Completed">
                             <CheckCircle className="size-4 shrink-0" aria-hidden />

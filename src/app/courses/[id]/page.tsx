@@ -4,7 +4,7 @@ import { Award, BookOpen, CalendarDays, Check, IndianRupee, Info, User } from 'l
 import EnrollButton from '@/components/EnrollButton'
 import CourseManageBar from '@/components/CourseManageBar'
 import ExpandableText from '@/components/ExpandableText'
-import { groupModulesByWeek } from '@/lib/course-modules'
+import { groupModulesBySection } from '@/lib/course-modules'
 import { getLearnerModuleStatusMap } from '@/lib/learner-module-status'
 import { toRenderableImageUrl } from '@/lib/drive-image'
 import { formatLocalDisplay } from '@/lib/timestamp'
@@ -38,7 +38,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
   const isAuthenticated = !!user
 
   // Queries that don't need auth
-  const [courseResult, modulesResult] = await Promise.all([
+  const [courseResult, modulesResult, sectionsResult] = await Promise.all([
     supabase
       .from('courses')
       .select(`
@@ -51,7 +51,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       .single(),
     supabase
       .from('modules')
-      .select('id, title, type, available_from, is_sequential, sort_order, week_index')
+      .select('id, title, type, available_from, is_sequential, sort_order, week_index, section_id')
+      .eq('course_id', id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('sections')
+      .select('id, title, sort_order')
       .eq('course_id', id)
       .order('sort_order', { ascending: true }),
   ])
@@ -82,7 +87,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
   }
 
   const modules = modulesResult.data
-  const sectionGroups = groupModulesByWeek(modules ?? [])
+  const sectionGroups = groupModulesBySection(modules ?? [], sectionsResult.data ?? [])
 
   const moduleUi = isEnrolled && user
     ? await getLearnerModuleStatusMap(
@@ -160,6 +165,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         href: `/courses/${id}/modules/${mod.id}`,
         timeLocked: isTimeLocked,
         lockDateLabel,
+        weekIndex: mod.week_index ?? null,
         ui: {
           complete: !!ui?.complete,
           overdue: !!ui?.overdue && !ui?.complete,

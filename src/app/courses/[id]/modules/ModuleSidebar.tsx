@@ -23,12 +23,13 @@ import {
 import type { ModuleUiStatus } from '@/lib/learner-module-status'
 import { queryKeys } from '@/lib/query/query-keys'
 
-/** Matches modules grouped by week in modules/layout.tsx */
+/** Matches modules grouped by section in modules/layout.tsx */
 export type SidebarModule = {
   id: string
   title: string
   type: string | null
   available_from: string | null
+  week_index?: number | null
 }
 
 type SectionGroup = {
@@ -93,12 +94,16 @@ export default function ModuleSidebar({
   const completionPct =
     totalModules > 0 ? Math.round((completedModules * 100) / totalModules) : 0
 
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
-    sectionGroups.reduce<Record<string, boolean>>((acc, sec) => {
-      acc[sec.id] = true
-      return acc
-    }, {})
-  )
+  // First section open by default; auto-expand whichever section contains the active lesson.
+  const activeSectionId = sectionGroups.find((s) =>
+    s.mods.some((m) => m.id === currentModuleId),
+  )?.id
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {}
+    if (sectionGroups[0]) initial[sectionGroups[0].id] = true
+    if (activeSectionId) initial[activeSectionId] = true
+    return initial
+  })
 
   const toggleSection = (secId: string) => {
     setExpandedSections((prev) => ({ ...prev, [secId]: !prev[secId] }))
@@ -170,7 +175,7 @@ export default function ModuleSidebar({
         )}
 
         {sectionGroups.map((section) => {
-          const expanded = expandedSections[section.id] ?? true
+          const expanded = expandedSections[section.id] ?? false
           const panelId = sectionPanelId(section.id)
           const triggerId = `${panelId}-trigger`
 
@@ -225,6 +230,11 @@ export default function ModuleSidebar({
                               <span className="flex-1 text-slate-400 truncate select-none" aria-hidden>
                                 {mod.title}
                               </span>
+                              {mod.week_index != null && (
+                                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                                  Wk {mod.week_index}
+                                </span>
+                              )}
                               <Lock className="w-3 h-3 text-slate-300 shrink-0" aria-hidden />
                             </div>
                           </li>
@@ -249,6 +259,17 @@ export default function ModuleSidebar({
                             <span className={`flex-1 truncate ${isActive ? 'font-semibold' : 'font-medium'}`}>
                               {mod.title}
                             </span>
+                            {mod.week_index != null && (
+                              <span
+                                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                  isActive
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                Wk {mod.week_index}
+                              </span>
+                            )}
                             {isComplete && (
                               <span
                                 className="shrink-0 text-emerald-600"
