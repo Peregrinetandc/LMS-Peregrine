@@ -83,7 +83,7 @@ export default function VerifyForm({
           className="flex flex-inline gap-2 items-center border border-emerald-200 rounded-lg bg-emerald-50 p-2 text-sm font-medium text-emerald-800"
         >
           <CheckCircle2 className="inline h-4 w-4 shrink-0" aria-hidden />
-          New code sent. Check your dev server terminal.
+          New code sent. Check your email.
         </div>
       ) : null}
 

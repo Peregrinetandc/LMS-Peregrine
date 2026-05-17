@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
 
 export type VerifyState = { error: string | null }
 
@@ -29,23 +28,9 @@ export async function resendOtp(_prev: ResendState, formData: FormData): Promise
   const email = (formData.get('email') as string)?.trim()
   if (!email) return { ok: false, error: 'Missing email.' }
 
-  const admin = createAdminClient()
-  if (!admin) return { ok: false, error: 'Server is not configured.' }
-
-  // DEV path: regenerate the OTP via admin and log it. When SMTP is wired,
-  // swap to: await supabase.auth.resend({ type: 'signup', email })
-  // Preserve existing user_metadata so full_name in raw_user_meta_data isn't blanked.
-  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 })
-  const existing = list?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
-  const meta = (existing?.user_metadata ?? {}) as Record<string, unknown>
-
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: 'signup',
-    email,
-    options: { data: meta },
-  })
+  const supabase = await createClient()
+  const { error } = await supabase.auth.resend({ type: 'signup', email })
   if (error) return { ok: false, error: error.message }
 
-  console.log(`[signup OTP resend] ${email} → ${data.properties?.email_otp}`)
   return { ok: true, error: null }
 }
